@@ -23,7 +23,10 @@ public sealed class VibescapeHost
     private readonly FrameUniforms _uniforms = new();
     private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
     private readonly FrameStats _stats = new();
+    private readonly MacOverlay _macOverlay = new();
     private VibescapeRenderer? _renderer;
+    private (int W, int H) _sceneSize;
+    private int _stallsThisPeriod;
     private bool _sampledEarly;
 
     /// <summary>Seconds after start at which a second frame sample is logged, once things have settled.</summary>
@@ -33,6 +36,21 @@ public sealed class VibescapeHost
 
     /// <summary>The most recent sample of drawn pixels, for the log and for tests.</summary>
     public FrameSample? LastSample { get; private set; }
+
+    /// <summary>Frames further apart than this are logged as a stall.</summary>
+    public const double StallSeconds = 0.5;
+
+    /// <summary>Whether an audio source is running (the CRT overlay shows only with a live source making sound). Set by the app.</summary>
+    public bool SourceLive { get; set; } = true;
+
+    /// <summary>The user asked for less motion (Windows "Animation effects" off): no beat flash, as the Mac honours Reduce Motion.</summary>
+    public bool ReduceMotion { get; set; }
+
+    /// <summary>Extra text for the once-a-minute health line (input idle time, from the app).</summary>
+    public Func<string?>? HealthExtra { get; set; }
+
+    /// <summary>The size vibescapes are drawn at before being stretched to the screen.</summary>
+    public (int Width, int Height) SceneSize => _sceneSize;
 
     /// <summary>Drawn over the vibescape each frame (after the pixel sample, so it never skews it).</summary>
     public event Action<double>? Overlay;
@@ -74,6 +92,8 @@ public sealed class VibescapeHost
         window.FramebufferResize += OnResize;
         window.Render += OnRender;
         window.Closing += OnClosing;
+        window.FocusChanged += focused => _log.Info("window", focused ? "focus gained" : "focus lost");
+        window.StateChanged += state => _log.Info("window", $"state {state}");
     }
 
     /// <summary>
@@ -115,11 +135,27 @@ public sealed class VibescapeHost
         // Minimised: nothing to see, so spend nothing drawing it.
         if (_window.WindowState == WindowState.Minimized) return;
 
+        if (delta > StallSeconds && FramesDrawn > 0)
+        {
+            _stallsThisPeriod++;
+            if (_stallsThisPeriod <= 10)
+                _log.Warn("frame", $"stall: {delta * 1000:F0} ms since the last frame; window state {_window.WindowState}");
+        }
+
         var size = _window.FramebufferSize;
+        var scale = MonitorArea.ContentScale(_window);
+        var scene = RenderScale.SceneSize(size.X, size.Y, scale);
+        if (scene != _sceneSize)
+        {
+            _sceneSize = scene;
+            _log.Info("render", $"drawing vibescapes at {scene.Width}x{scene.Height}, stretched to {size.X}x{size.Y} " +
+                                $"(1x, as the Mac draws them; display scaling {scale * 100:F0}%)");
+        }
         _fillUniforms(_uniforms, delta);
-        _uniforms.ResolutionX = size.X;
-        _uniforms.ResolutionY = size.Y;
-        _renderer.Draw(_uniforms, delta);
+        _uniforms.ResolutionX = scene.Width;
+        _uniforms.ResolutionY = scene.Height;
+        _macOverlay.Advance(_uniforms, SourceLive, ReduceMotion, delta);
+        _renderer.Draw(_uniforms, delta, size.X, size.Y, _macOverlay.CrtOpacity);
         FramesDrawn++;
 
         // Read back what was actually drawn, before the swap: tells "we drew
@@ -133,9 +169,15 @@ public sealed class VibescapeHost
         }
 
         Overlay?.Invoke(delta);
+        _renderer?.DrawFlash(_macOverlay.FlashCentreAlpha, _macOverlay.FlashOpacity, size.X, size.Y, scale);
 
         if (_stats.Add(delta) is { } summary)
-            _log.Info("health", $"{summary}; working set {Environment.WorkingSet / (1024 * 1024)} MB");
+        {
+            _log.Info("health", $"{summary}; working set {Environment.WorkingSet / (1024 * 1024)} MB; " +
+                                $"stalls {_stallsThisPeriod}; scene {scene.Width}x{scene.Height}" +
+                                (HealthExtra?.Invoke() is { } extra ? "; " + extra : ""));
+            _stallsThisPeriod = 0;
+        }
     }
 
     private void Sample(string when)

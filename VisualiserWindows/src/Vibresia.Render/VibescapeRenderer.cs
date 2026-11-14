@@ -19,6 +19,7 @@ public sealed class VibescapeRenderer : IDisposable
     private readonly uint _vao;
     private readonly uint _vbo;
     private readonly GradePass _grade;
+    private readonly OverlayPass _overlay;
     private readonly BuiltinState _builtinState = new();
     private readonly float[] _palette = Palette.Neon.UniformValues();
     private ShaderProgram? _program;
@@ -52,6 +53,7 @@ public sealed class VibescapeRenderer : IDisposable
         gl.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 2 * sizeof(float), (void*)0);
         gl.BindVertexArray(0);
         _grade = new GradePass(gl);
+        _overlay = new OverlayPass(gl);
     }
 
     /// <summary>
@@ -84,19 +86,32 @@ public sealed class VibescapeRenderer : IDisposable
         return null;
     }
 
-    /// <summary>Draws the current vibescape to the bound (default) framebuffer, graded.</summary>
+    /// <summary>
+    /// Draws the current vibescape at <c>u.Resolution</c> (the scene size,
+    /// which may be smaller than the screen: the Mac draws at 1×), grades it
+    /// onto the bound framebuffer at the screen size, then lays the CRT
+    /// overlay over it.
+    /// </summary>
     /// <param name="dt">Seconds since the last frame, for the built-ins that keep their own state.</param>
-    public void Draw(FrameUniforms u, double dt)
+    /// <param name="screenWidth">Size of the bound framebuffer; 0 means the same as the scene.</param>
+    /// <param name="crtOpacity">The Mac's CRT overlay, 0 when there is no sound.</param>
+    public void Draw(FrameUniforms u, double dt, int screenWidth = 0, int screenHeight = 0, float crtOpacity = 0)
     {
         if (_program is null || Current is null) return;
         var width = (int)u.ResolutionX;
         var height = (int)u.ResolutionY;
         if (width <= 0 || height <= 0) return;
+        if (screenWidth <= 0 || screenHeight <= 0) (screenWidth, screenHeight) = (width, height);
 
         _grade.BeginScene(width, height);
         DrawScene(u, dt);
-        _grade.Present(width, height, Current.Graded ? Palette.Neon : null);
+        _grade.Present(screenWidth, screenHeight, Current.Graded ? Palette.Neon : null);
+        _overlay.DrawCrt(crtOpacity, screenWidth, screenHeight);
     }
+
+    /// <summary>The Mac's beat flash, over everything else (the Mac draws it above its interface too).</summary>
+    public void DrawFlash(float centreAlpha, float opacity, int screenWidth, int screenHeight, float pointSize) =>
+        _overlay.DrawFlash(centreAlpha, opacity, screenWidth, screenHeight, pointSize);
 
     private void DrawScene(FrameUniforms u, double dt)
     {
@@ -148,6 +163,7 @@ public sealed class VibescapeRenderer : IDisposable
     {
         _program?.Dispose();
         _grade.Dispose();
+        _overlay.Dispose();
         _gl.DeleteBuffer(_vbo);
         _gl.DeleteVertexArray(_vao);
     }

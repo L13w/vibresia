@@ -513,3 +513,81 @@ public sealed class SessionMarkerTests : IDisposable
         if (Directory.Exists(_dir)) Directory.Delete(_dir, true);
     }
 }
+
+/// <summary>Timings and thresholds from VisualiserMac ContentView.swift (CRTOverlay, BeatFlash) and AudioEngine.swift (isSounding, BeatFlashLevel).</summary>
+public class MacOverlayTests
+{
+    private static FrameUniforms Frame(float rms = 0, float beat = 0) => new() { Rms = rms, BeatStrength = beat };
+
+    [Fact]
+    public void SoundingHasUpstreamsHysteresis()
+    {
+        var m = new MacOverlay();
+        m.Advance(Frame(rms: 0.005f), true, false, 0.016);
+        Assert.False(m.IsSounding);                 // under 0.008 to start
+        m.Advance(Frame(rms: 0.009f), true, false, 0.016);
+        Assert.True(m.IsSounding);
+        m.Advance(Frame(rms: 0.005f), true, false, 0.016);
+        Assert.True(m.IsSounding);                  // stays on above 0.003
+        m.Advance(Frame(rms: 0.002f), true, false, 0.016);
+        Assert.False(m.IsSounding);
+        m.Advance(Frame(rms: 0.5f), false, false, 0.016);
+        Assert.False(m.IsSounding);                 // no live source, no sound
+    }
+
+    [Fact]
+    public void TheCrtFadesInOverHalfASecondEasedInAndOut()
+    {
+        var m = new MacOverlay();
+        m.Advance(Frame(rms: 0.02f), true, false, 0.25);
+        Assert.Equal(0.5f, m.CrtOpacity, 3);        // easeInOut is halfway at half time
+        m.Advance(Frame(rms: 0.02f), true, false, 0.25);
+        Assert.Equal(1f, m.CrtOpacity, 3);
+        m.Advance(Frame(rms: 0), true, false, 0.125);
+        Assert.Equal(1 - 2 * 0.25 * 0.25, m.CrtOpacity, 3);
+    }
+
+    [Theory]
+    [InlineData(0.039f, 0.0)]
+    [InlineData(0.051f, 0.06)]
+    [InlineData(0.5f, 0.5)]
+    public void FlashStrengthIsSteppedToTwoHundredths(float raw, double expected)
+    {
+        var m = new MacOverlay();
+        m.Advance(Frame(beat: raw), true, false, 0.016);
+        Assert.Equal(expected, m.FlashStrength, 6);
+    }
+
+    [Fact]
+    public void FlashFadesInOnAppearingThenFollowsTheStrengthSquared()
+    {
+        var m = new MacOverlay();
+        m.Advance(Frame(beat: 0.5f), true, false, 0.09);   // half of the 0.18 s easeOut
+        Assert.Equal(Math.Pow(0.5 * 0.75, 2), m.FlashOpacity, 3);
+        m.Advance(Frame(beat: 0.5f), true, false, 0.2);
+        Assert.Equal(0.25, m.FlashOpacity, 3);
+        m.Advance(Frame(beat: 0.3f), true, false, 0.016);  // visible to visible: no animation
+        Assert.Equal(0.09, m.FlashOpacity, 3);
+        Assert.Equal(0.18f, m.FlashCentreAlpha, 4);         // min(0.4, 0.3 × 0.6)
+    }
+
+    [Fact]
+    public void LessMotionMeansNoFlash()
+    {
+        var m = new MacOverlay();
+        for (var i = 0; i < 30; i++) m.Advance(Frame(beat: 0.8f), true, reduceMotion: true, 0.016);
+        Assert.Equal(0f, m.FlashOpacity);
+    }
+}
+
+public class RenderScaleTests
+{
+    [Theory]
+    [InlineData(3840, 2160, 1.5f, 2560, 1440)]
+    [InlineData(3840, 2160, 2f, 1920, 1080)]
+    [InlineData(1920, 1080, 1f, 1920, 1080)]
+    [InlineData(1920, 1080, 0.5f, 1920, 1080)]      // never drawn bigger than the screen
+    [InlineData(1920, 1080, float.NaN, 1920, 1080)]
+    public void DrawsAtOneXOfTheDisplayScaling(int w, int h, float scale, int ew, int eh) =>
+        Assert.Equal((ew, eh), RenderScale.SceneSize(w, h, scale));
+}

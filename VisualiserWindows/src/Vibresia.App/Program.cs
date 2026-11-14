@@ -93,11 +93,22 @@ public static partial class Program
             settings.Save(log);
         }
         var pointer = new PointerInput();
+        VibescapeHost? hostRef = null;
         var host = new VibescapeHost(window, gl, log, start ?? fallback, fallback, (u, dt) =>
         {
             audio.Tick(u, dt);
             pointer.Fill(u, dt);
+            if (hostRef is not null) hostRef.SourceLive = audio.Status is AudioStatus.Playing or AudioStatus.NothingPlaying;
         });
+        hostRef = host;
+#if WINDOWS
+        using var windows = new WindowsSystem(log);
+        windows.KeepDisplayAwake();
+        windows.WatchDisplay();
+        host.ReduceMotion = WindowsSystem.AnimationsOff();
+        host.HealthExtra = () => $"input idle {WindowsSystem.InputIdleSeconds():F0} s";
+        log.Info("startup", $"animation effects {(host.ReduceMotion ? "off: no beat flash" : "on")}");
+#endif
         var firstFrameLogged = false;
         window.Render += _ =>
         {

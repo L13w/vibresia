@@ -110,5 +110,6 @@ public sealed class MotionClocks
         u.Presence = (float)Presence;
         analyzer.Bands.CopyTo(u.Bands);
         u.Bpm = snap.Bpm;
+        u.Rms = snap.Rms;
     }
 }

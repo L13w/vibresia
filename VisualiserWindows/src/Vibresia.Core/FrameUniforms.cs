@@ -27,4 +27,7 @@ public sealed class FrameUniforms
 
     /// <summary>Detected tempo, 0 when none. Not a prelude uniform: Hamster Dance's sprite clock follows it.</summary>
     public double Bpm;
+
+    /// <summary>Loudness of the analysis window. Not a prelude uniform: the CRT overlay shows only while there is sound.</summary>
+    public float Rms;
 }

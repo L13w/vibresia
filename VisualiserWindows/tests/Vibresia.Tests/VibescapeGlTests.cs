@@ -51,7 +51,7 @@ public sealed class VibescapeGlTests : IDisposable
     private static VibescapeEntry Custom(string body, string id = "test") => new(VibescapeId.Custom(id), id.ToUpperInvariant(), "me", body);
 
     /// <summary>Draws one frame into the test's own framebuffer (as the window would be) and reads it back.</summary>
-    private byte[] Draw(VibescapeRenderer r, Action<FrameUniforms>? tweak = null)
+    private byte[] Draw(VibescapeRenderer r, Action<FrameUniforms>? tweak = null, (int W, int H)? screen = null, float crtOpacity = 0)
     {
         _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _fbo);
         var u = new FrameUniforms();
@@ -59,7 +59,7 @@ public sealed class VibescapeGlTests : IDisposable
         u.Beat = 1;
         u.ResolutionX = W; u.ResolutionY = H;
         tweak?.Invoke(u);
-        r.Draw(u, 1 / 60.0);
+        r.Draw(u, 1 / 60.0, screen?.W ?? 0, screen?.H ?? 0, crtOpacity);
         _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _fbo);
         var px = new byte[W * H * 4];
         _gl.ReadPixels<byte>(0, 0, W, H, PixelFormat.Rgba, PixelType.UnsignedByte, px);
@@ -240,6 +240,39 @@ public sealed class VibescapeGlTests : IDisposable
         Assert.Empty(VibescapeRenderer.NotFed.Intersect(r.Fed));
     }
 
+    /// <summary>A scene drawn at 1× smaller than the screen is stretched to fill all of it.</summary>
+    [Fact]
+    public void ASmallerSceneFillsTheWholeScreen()
+    {
+        using var r = new VibescapeRenderer(_gl);
+        Assert.Null(r.Use(Custom("vec3 render(vec2 p, float t) { return vec3(0.5, 0.25, 0.75); }")));
+        var px = Draw(r, u => { u.ResolutionX = W / 2; u.ResolutionY = H / 2; }, screen: (W, H));
+        var want = Grade((0.5f, 0.25f, 0.75f), Palette.Neon);
+        foreach (var (x, y) in new[] { (0, 0), (W - 1, H - 1), (W - 1, 0), (W / 2, H / 2) })
+            AssertPixel(px, want, x, y);
+    }
+
+    /// <summary>The CRT overlay darkens the edges (vignette) more than the centre, and the beat flash tints the centre pink.</summary>
+    [Fact]
+    public void CrtOverlayAndBeatFlashDrawOverTheFrame()
+    {
+        using var r = new VibescapeRenderer(_gl);
+        Assert.Null(r.Use(Custom("vec3 render(vec2 p, float t) { return vec3(0.6); }")));
+        var plain = Draw(r);
+        var crt = Draw(r, crtOpacity: 1);
+        static int Lum(byte[] px, int x, int y) { var i = (y * W + x) * 4; return px[i] + px[i + 1] + px[i + 2]; }
+        Assert.True(Lum(crt, 0, 0) < Lum(plain, 0, 0) - 60, "corner should be vignetted");
+        Assert.True(Lum(plain, W / 2, H / 2) - Lum(crt, W / 2, H / 2) < 40, "centre mostly untouched");
+
+        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _fbo);
+        r.DrawFlash(0.4f, 1f, W, H, 0.1f); // small point size so the flash covers the test frame
+        var flashed = new byte[W * H * 4];
+        _gl.ReadPixels<byte>(0, 0, W, H, PixelFormat.Rgba, PixelType.UnsignedByte, flashed);
+        var c = (H / 2 * W + W / 2) * 4;
+        Assert.True(flashed[c] > crt[c] + 20 && flashed[c + 2] > crt[c + 2] + 10, "centre should be tinted pink");
+        Assert.Equal(GLEnum.NoError, _gl.GetError());
+    }
+
     /// <summary>Upstream gradeFS, on the CPU.</summary>
     private static (float R, float G, float B) Grade((float R, float G, float B) c, Palette p)
     {
@@ -254,9 +287,9 @@ public sealed class VibescapeGlTests : IDisposable
         return (Math.Clamp(c.R, 0, 1), Math.Clamp(c.G, 0, 1), Math.Clamp(c.B, 0, 1));
     }
 
-    private static void AssertPixel(byte[] px, (float R, float G, float B) expected)
+    private static void AssertPixel(byte[] px, (float R, float G, float B) expected, int x = W / 2, int y = H / 2)
     {
-        var i = (H / 2 * W + W / 2) * 4;
+        var i = (y * W + x) * 4;
         var actual = (px[i], px[i + 1], px[i + 2]);
         var want = ((byte)Math.Round(expected.R * 255), (byte)Math.Round(expected.G * 255), (byte)Math.Round(expected.B * 255));
         Assert.True(Math.Abs(actual.Item1 - want.Item1) <= 2 && Math.Abs(actual.Item2 - want.Item2) <= 2 && Math.Abs(actual.Item3 - want.Item3) <= 2,

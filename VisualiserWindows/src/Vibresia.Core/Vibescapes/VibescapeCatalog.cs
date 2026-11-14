@@ -2,7 +2,7 @@ namespace Vibresia.Core.Vibescapes;
 
 /// <summary>
 /// The vibescapes the app lists: the built-ins this port can draw, in
-/// upstream's order, followed by the user's enabled custom vibescapes.
+/// the order a fresh Mac install lists them, followed by the user's enabled custom vibescapes.
 /// </summary>
 public sealed class VibescapeCatalog
 {

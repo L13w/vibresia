@@ -76,10 +76,25 @@ public static partial class Program
         using var audio = new AudioPipeline(log);
         audio.Use(settings.Audio == AudioChoice.Demo || !sources.HasLoopback ? sources.Demo : sources.Preferred);
 
+        var marker = new SessionMarker(SessionMarker.DefaultPath());
+        var unclean = marker.Begin(log);
         var fallback = catalog.Find(VibescapeCatalog.Default)!;
         var start = catalog.Find(settings.Vibescape);
+        string? startNotice = null;
         if (start is null) log.Warn("vibescape", $"saved vibescape {settings.Vibescape} isn't available; starting on {fallback.Id}");
-        var host = new VibescapeHost(window, gl, log, start ?? fallback, fallback, (u, dt) => audio.Tick(u, dt));
+        else if (unclean && start.Id.IsCustom)
+        {
+            // It may be the reason the last run died (a shader that hung the GPU).
+            log.Warn("vibescape", $"the last run didn't exit cleanly while showing {start.Id}; starting on {fallback.Id}");
+            startNotice = $"Vibresia didn't close properly last time, so it isn't reopening {start.Title}.";
+            start = null;
+        }
+        var pointer = new PointerInput();
+        var host = new VibescapeHost(window, gl, log, start ?? fallback, fallback, (u, dt) =>
+        {
+            audio.Tick(u, dt);
+            pointer.Fill(u, dt);
+        });
         var firstFrameLogged = false;
         window.Render += _ =>
         {
@@ -91,7 +106,9 @@ public static partial class Program
         var input = window.CreateInput();
         var overlay = new StatusOverlay(gl, window, input);
         host.ReleaseOnClose(overlay);
-        if (host.StartupProblem is { } failed)
+        if (startNotice is not null)
+            overlay.Notice(startNotice, StatusTone.Hint, ErrorSeconds);
+        else if (host.StartupProblem is { } failed)
             overlay.Notice($"{failed.Entry.Title} didn't load, so this is {host.Current.Title}.\n{failed.Problem.ForScreen()}", StatusTone.Error, ErrorSeconds);
         else
             overlay.Notice(host.Current.Title, StatusTone.Info, TitleSeconds);
@@ -146,9 +163,23 @@ public static partial class Program
             overlay.Render((float)dt, picker.IsOpen ? pickerView() : null);
         };
 
+        foreach (var mouse in input.Mice)
+        {
+            mouse.MouseMove += (_, pos) => pointer.Move(pos.X, pos.Y, window.Size.X, window.Size.Y);
+            mouse.MouseDown += (_, _) => pointer.Down = true;
+            mouse.MouseUp += (_, _) => pointer.Down = false;
+        }
+        foreach (var kb in input.Keyboards)
+        {
+            // Watched, not taken (as upstream): the app's own keys still work, and the vibescape sees them too.
+            kb.KeyChar += (_, c) => pointer.Typed(c);
+            kb.KeyUp += (_, _, _) => pointer.KeyDown = false;
+        }
+
         foreach (var kb in input.Keyboards)
             kb.KeyDown += (_, key, _) =>
             {
+                pointer.KeyDown = true;
                 if (picker.IsOpen)
                 {
                     switch (key)
@@ -179,6 +210,7 @@ public static partial class Program
             };
 
         window.Run();
+        marker.End(log);
     }
 
     private static void OpenFolder(string folder, Log log)

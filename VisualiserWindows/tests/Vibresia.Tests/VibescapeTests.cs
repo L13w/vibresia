@@ -149,6 +149,9 @@ public sealed class CustomLoaderTests : IDisposable
         Put("3-huge.json", Json("huge", extra: $"\"pad\":\"{new string('a', 300 * 1024)}\""));
         Put("4-null.json", "null");
         Put("5-wrongtype.json", """{"id":"w","name":"W","shader":"s","enabled":"yes"}""");
+        Put("6-badmodified.json", """{"id":"m","name":"M","shader":"s","modified":42}""");
+        Put("7-badshare.json", """{"id":"k","name":"K","shader":"s","shareEditKey":{"x":1}}""");
+        Put("8-emptyid.json", """{"id":"","name":"E","shader":"s"}""");
         Put("good.json", Json("good"));
         Assert.Equal("good", Assert.Single(Load()).Id);
         var log = LogText;
@@ -157,6 +160,9 @@ public sealed class CustomLoaderTests : IDisposable
         Assert.Contains("skipped 3-huge.json: 300 KB is over the 256 KB limit", log);
         Assert.Contains("skipped 4-null.json", log);
         Assert.Contains("skipped 5-wrongtype.json: not valid JSON", log);
+        Assert.Contains("skipped 6-badmodified.json: not valid JSON", log);
+        Assert.Contains("skipped 7-badshare.json: shareEditKey isn't a string", log);
+        Assert.Contains("skipped 8-emptyid.json: empty id", log);
     }
 
     [Fact]
@@ -433,5 +439,77 @@ public class NoNetworkTests
                 Assert.DoesNotContain(types, ns => ns.StartsWith(bad, StringComparison.Ordinal));
             }
         }
+    }
+}
+
+public class PointerInputTests
+{
+    [Fact]
+    public void NobodyThereUntilThePointerMoves()
+    {
+        var p = new PointerInput();
+        var u = new FrameUniforms();
+        p.Fill(u, 1 / 60.0);
+        Assert.Equal(0, u.MouseHere);
+        p.Move(0, 0, 1920, 1080);
+        p.Fill(u, 1 / 60.0);
+        Assert.Equal(1, u.MouseHere);
+    }
+
+    /// <summary>Same coordinates as screenP(): x across from the middle, y up, both over the height.</summary>
+    [Fact]
+    public void ThePointerIsInScreenPCoordinatesOnceItSettles()
+    {
+        var p = new PointerInput();
+        var u = new FrameUniforms();
+        p.Move(1920, 0, 1920, 1080); // top-right corner
+        for (var i = 0; i < 300; i++) p.Fill(u, 1 / 60.0);
+        Assert.Equal(960f / 1080, u.MouseX, 3);
+        Assert.Equal(0.5f, u.MouseY, 3);
+    }
+
+    [Fact]
+    public void ThePointerEasesWithUpstreamsTimeConstant()
+    {
+        var p = new PointerInput();
+        var u = new FrameUniforms();
+        p.Move(2160, 540, 2160, 1080); // right edge: target x = (2160 - 1080) / 1080 = 1
+        p.Fill(u, 0.1);
+        Assert.Equal(1 - Math.Exp(-0.1 / 0.15), u.MouseX, 4);
+        p.Fill(u, 5); // a long frame is capped at 0.1 s, so it can't jump
+        Assert.True(u.MouseX < 0.99f);
+    }
+
+    [Fact]
+    public void KeysAndButtons()
+    {
+        var p = new PointerInput { Down = true, KeyDown = true };
+        p.Typed(' ');
+        var u = new FrameUniforms();
+        p.Fill(u, 0.01);
+        Assert.Equal((1f, 32f, 1f), (u.MouseDown, u.Key, u.KeyDown));
+    }
+}
+
+public sealed class SessionMarkerTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "vibresia-marker-" + Guid.NewGuid().ToString("N"));
+
+    [Fact]
+    public void ACleanExitLeavesNothingAndACrashIsNoticedNextTime()
+    {
+        using var log = new Log(Path.Combine(_dir, "logs"));
+        var path = Path.Combine(_dir, SessionMarker.FileName);
+        var first = new SessionMarker(path);
+        Assert.False(first.Begin(log));
+        first.End(log);
+        Assert.False(new SessionMarker(path).Begin(log)); // previous run was clean
+        // ...and this run "crashes": no End.
+        Assert.True(new SessionMarker(path).Begin(log));
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_dir)) Directory.Delete(_dir, true);
     }
 }

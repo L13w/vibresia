@@ -22,7 +22,7 @@ public static class ShaderSources
     public static string GradeVertex { get; } = Read("grade.vert");
     public static string GradeFragment { get; } = Read("grade.frag");
 
-    /// <summary>Built-in vibescape names in upstream's catalog order.</summary>
+    /// <summary>Every shader built-in upstream defines, in its FunShaders mode-table order. The app lists them in the Mac's own order (VibescapeCatalog).</summary>
     public static IReadOnlyList<string> BuiltinOrder { get; } =
         Read("builtin/order.txt").Split('\n', StringSplitOptions.RemoveEmptyEntries);
 

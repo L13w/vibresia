@@ -205,7 +205,8 @@ public sealed class VibescapeGlTests : IDisposable
             host.ReleaseOnClose(overlay);
             var picker = new PickerState();
             picker.Open(catalog.Entries.Count, catalog.Entries.Count - 1);
-            overlay.Notice("Line 3 needs a fix: something\nsecond line", StatusTone.Error, 10);
+            // A '%' in untrusted text must be drawn, not read as a format directive.
+            overlay.Notice("Line 3 needs a fix: %s %n %d\nsecond line", StatusTone.Error, 10);
             var frames = 0;
             host.Overlay += dt =>
             {
@@ -222,6 +223,21 @@ public sealed class VibescapeGlTests : IDisposable
         {
             window.Dispose();
         }
+    }
+
+    /// <summary>Every uniform upstream's prelude declares is fed by the renderer, or deliberately left at zero (NotFed).</summary>
+    [Fact]
+    public void EveryPreludeUniformIsFedOrDeclaredNotFed()
+    {
+        var declared = System.Text.RegularExpressions.Regex.Matches(ShaderSources.Prelude, @"^uniform\s+\w+\s+(\w+)", System.Text.RegularExpressions.RegexOptions.Multiline)
+            .Select(m => m.Groups[1].Value).ToHashSet();
+        Assert.Contains("uMouse", declared);
+        using var r = new VibescapeRenderer(_gl);
+        Assert.Null(r.Use(Catalog.Find(VibescapeCatalog.Default)!));
+        Draw(r);
+        var missing = declared.Except(r.Fed).Except(VibescapeRenderer.NotFed).ToList();
+        Assert.True(missing.Count == 0, "not fed and not declared NotFed: " + string.Join(", ", missing));
+        Assert.Empty(VibescapeRenderer.NotFed.Intersect(r.Fed));
     }
 
     /// <summary>Upstream gradeFS, on the CPU.</summary>

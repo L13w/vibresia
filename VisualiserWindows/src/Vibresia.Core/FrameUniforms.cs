@@ -4,7 +4,7 @@ namespace Vibresia.Core;
 /// One frame's values for upstream's shader prelude uniforms. Names and
 /// meanings are upstream's contract (VisualiserMac FunShaders.prelude):
 /// custom vibescapes are written against them, so they are not ours to rename.
-/// Uniforms for features v1 doesn't have (genre, track position, MIDI, keys)
+/// Uniforms for features v1 doesn't have (genre, track position, MIDI)
 /// stay at their "nothing to know" values.
 /// </summary>
 public sealed class FrameUniforms
@@ -21,6 +21,7 @@ public sealed class FrameUniforms
     public float Clock;
     public float LevelSmooth, BassSmooth, Presence;
     public float MouseX, MouseY, MouseHere, MouseDown;
+    public float Key, KeyDown;
     public float ResolutionX, ResolutionY;
     public readonly float[] Bands = new float[BandCount];
 

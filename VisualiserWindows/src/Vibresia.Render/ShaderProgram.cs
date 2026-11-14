@@ -15,6 +15,10 @@ public sealed class ShaderProgram : IDisposable
 {
     private readonly GL _gl;
     private readonly Dictionary<string, int> _locations = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _assigned = new(StringComparer.Ordinal);
+
+    /// <summary>Every uniform name the app has set on this program, used by the shader or not: what the app feeds.</summary>
+    public IReadOnlySet<string> Assigned => _assigned;
     public uint Handle { get; }
 
     public ShaderProgram(GL gl, string vertexSource, string fragmentSource)
@@ -58,6 +62,7 @@ public sealed class ShaderProgram : IDisposable
     /// <summary>-1 when the shader doesn't use the uniform — setting it is then a no-op, which is how upstream treats unused uniforms.</summary>
     public int Location(string name)
     {
+        _assigned.Add(name);
         if (!_locations.TryGetValue(name, out var loc))
             _locations[name] = loc = _gl.GetUniformLocation(Handle, name);
         return loc;

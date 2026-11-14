@@ -71,7 +71,7 @@ public sealed class StatusOverlay : IDisposable
             ImGui.SetNextWindowPos(new Vector2(margin, io.DisplaySize.Y - margin), ImGuiCond.Always, new Vector2(0, 1));
             ImGui.SetNextWindowBgAlpha(0.55f);
             ImGui.Begin("status", passive);
-            ImGui.TextColored(Colour(_tone), text);
+            Text(Colour(_tone), text);
             ImGui.End();
         }
 
@@ -82,7 +82,7 @@ public sealed class StatusOverlay : IDisposable
             ImGui.SetNextWindowBgAlpha(0.65f);
             ImGui.Begin("notice", passive);
             ImGui.PushTextWrapPos(io.DisplaySize.X * 0.6f);
-            ImGui.TextColored(Colour(_noticeTone), notice);
+            Text(Colour(_noticeTone), notice);
             ImGui.PopTextWrapPos();
             ImGui.End();
         }
@@ -120,6 +120,15 @@ public sealed class StatusOverlay : IDisposable
         ImGui.EndChild();
         if (ImGui.Button("Open custom folder")) view.OpenCustomFolder();
         ImGui.End();
+    }
+
+    // Untrusted text (custom vibescape names, driver logs) must never reach a
+    // printf-style format argument, where a '%' would be read as a directive.
+    private static void Text(Vector4 colour, string text)
+    {
+        ImGui.PushStyleColor(ImGuiCol.Text, colour);
+        ImGui.TextUnformatted(text);
+        ImGui.PopStyleColor();
     }
 
     private static Vector4 Colour(StatusTone tone) => tone switch

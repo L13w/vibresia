@@ -23,6 +23,20 @@ public sealed class VibescapeRenderer : IDisposable
     private readonly float[] _palette = Palette.Neon.UniformValues();
     private ShaderProgram? _program;
 
+    /// <summary>
+    /// Prelude uniforms deliberately left at zero, upstream's "nothing to
+    /// know" value, because the port has no source for them: genre and track
+    /// position need song identification, and MIDI input isn't ported.
+    /// </summary>
+    public static IReadOnlySet<string> NotFed { get; } = new HashSet<string>(StringComparer.Ordinal)
+    {
+        "uGenre", "uTrackPos", "uTrackDuration", "uTrackProgress", "uTrackKnown",
+        "uMidiNote", "uMidiVelocity", "uMidiNotes", "uMidiCC", "uMidiCCValue",
+    };
+
+    /// <summary>Uniform names set on the current program so far; for checking every prelude uniform is fed or in <see cref="NotFed"/>.</summary>
+    public IReadOnlySet<string> Fed => _program?.Assigned ?? new HashSet<string>();
+
     /// <summary>The vibescape drawing now; null until one has compiled.</summary>
     public VibescapeEntry? Current { get; private set; }
 
@@ -108,9 +122,10 @@ public sealed class VibescapeRenderer : IDisposable
         p.Set("uMouse", u.MouseX, u.MouseY);
         p.Set("uMouseDown", u.MouseDown);
         p.Set("uMouseHere", u.MouseHere);
-        // Features v1 doesn't have read as "nothing to know": no genre, no
-        // track position, no key or MIDI input (GL zero-initialises uniforms,
-        // which is exactly those values, so nothing needs setting).
+        p.Set("uKey", u.Key);
+        p.Set("uKeyDown", u.KeyDown);
+        // Features v1 doesn't have read as "nothing to know" (NotFed): GL
+        // zero-initialises uniforms, which is exactly those values.
         p.SetVec3Array("uPalette", _palette);
 
         if (!Current!.Id.IsCustom)

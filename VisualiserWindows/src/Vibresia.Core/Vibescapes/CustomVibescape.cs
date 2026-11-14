@@ -46,6 +46,16 @@ public static class CustomVibescapeLoader
         [JsonPropertyName("author")] public string? Author { get; set; }
         [JsonPropertyName("shader")] public string? Shader { get; set; }
         [JsonPropertyName("enabled")] public bool? Enabled { get; set; }
+
+        // Not used, but typed as upstream's decoder types them: the Mac drops
+        // a file whose field has the wrong type, so the port does too.
+        [JsonPropertyName("url")] public string? Url { get; set; }
+        [JsonPropertyName("modified")] public DateTimeOffset? Modified { get; set; }
+        [JsonPropertyName("shareID")] public string? ShareId { get; set; }
+        [JsonPropertyName("shareKey")] public string? ShareKey { get; set; }
+        [JsonPropertyName("shareRevision")] public int? ShareRevision { get; set; }
+        // The publish capability is a secret: only its JSON type is checked, never its value.
+        [JsonPropertyName("shareEditKey")] public JsonElement? ShareEditKey { get; set; }
     }
 
     /// <summary>Reads the folder, creating it if it doesn't exist yet so the user can find it.</summary>
@@ -111,9 +121,12 @@ public static class CustomVibescapeLoader
                 return (null, $"{size / 1024} KB is over the {MaxFileBytes / 1024} KB limit");
             var wire = JsonSerializer.Deserialize<Wire>(File.ReadAllBytes(path), Options);
             if (wire is null) return (null, "the file is JSON null");
+            if (wire.ShareEditKey is { ValueKind: not (JsonValueKind.String or JsonValueKind.Null) })
+                return (null, "shareEditKey isn't a string");
             var missing = new[] { ("id", wire.Id), ("name", wire.Name), ("shader", wire.Shader) }
                 .Where(f => f.Item2 is null).Select(f => f.Item1).ToList();
             if (missing.Count > 0) return (null, $"missing {string.Join(", ", missing)}");
+            // The Mac accepts an empty id; the port can't name one in settings, so it is skipped (a recorded difference).
             if (wire.Id!.Length == 0) return (null, "empty id");
             return (new CustomVibescape(wire.Id, wire.Name!, wire.Author ?? "", wire.Shader!, wire.Enabled ?? true), null);
         }

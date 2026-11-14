@@ -23,7 +23,7 @@ Start it with `--windowed` to get a window instead of full screen. The last vibe
 
 Put vibescape `.json` files (the macOS app's format, so a file copied from a Mac works) in `%APPDATA%\Vibresia\Vibescapes\`. The vibescape list has an **Open custom folder** button that opens it. Opening the list rescans the folder, so there is no need to restart. One that doesn't compile shows why (with the line in your code), and the previous vibescape keeps playing.
 
-Not yet the same as the Mac: no Auto Scan, The Band or Machine; no palette picker (everything uses the Mac's default NEON grade); no editor or sharing; the list is a simple one rather than the Mac's menu and panel.
+Not yet the same as the Mac: no Auto Scan, The Band or Machine; no song identification, genre or track position; no MIDI input; no palette picker (everything uses the Mac's default NEON grade); no editor or sharing; the list is a simple one rather than the Mac's menu and panel. The pointer and keys reach the vibescapes as on the Mac.
 
 ## Building (works on Linux or Windows)
 

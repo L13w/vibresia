@@ -16,7 +16,12 @@ public static class GlWindow
             Size = new Vector2D<int>(1280, 720),
             IsVisible = visible,
             VSync = true,
-            WindowState = fullscreen ? WindowState.Fullscreen : WindowState.Normal,
+            // Full screen is a borderless window covering the monitor, not
+            // exclusive full-screen mode: exclusive mode switching left a 4K
+            // Intel UHD monitor black, and borderless is what Windows itself
+            // treats as the reliable full-screen path for multi-monitor setups.
+            WindowState = WindowState.Normal,
+            WindowBorder = fullscreen ? WindowBorder.Hidden : WindowBorder.Resizable,
             API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible,
                 new APIVersion(major, minor)),
         };
@@ -34,6 +39,11 @@ public static class GlWindow
 
         var window = Window.Create(options);
         window.Initialize();
+        if (options.WindowBorder == WindowBorder.Hidden && window.Monitor is { } monitor)
+        {
+            window.Position = monitor.Bounds.Origin;
+            window.Size = monitor.Bounds.Size;
+        }
 
         var gl = GL.GetApi(window);
         var info = GlInfo.Query(gl);

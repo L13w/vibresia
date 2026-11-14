@@ -1,7 +1,6 @@
 ﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Silk.NET.Input;
-using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 using Vibresia.Core;
 using Vibresia.Render;
@@ -63,16 +62,17 @@ public static partial class Program
         var (window, gl, info) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: !windowed));
         using var _ = window;
         log.Info("gpu", info.ToString());
-        log.Info("startup", $"window up after {started.ElapsedMilliseconds} ms; size {window.FramebufferSize}");
+        log.Info("startup", $"window up after {started.ElapsedMilliseconds} ms; {(windowed ? "windowed" : "borderless full screen")}; " +
+                            $"monitor {window.Monitor?.Name} {window.Monitor?.Bounds.Size}; framebuffer {window.FramebufferSize}");
 
-        using var renderer = new VibescapeRenderer(gl);
-        renderer.UseBuiltin(StartVibescape);
-        log.Info("vibescape", $"showing {StartVibescape}");
-
-        var uniforms = new FrameUniforms();
-        var clock = Stopwatch.StartNew();
-        var stats = new FrameStats();
-        var firstFrame = true;
+        var host = new VibescapeHost(window, gl, log, StartVibescape, SyntheticPulse.Fill);
+        var firstFrameLogged = false;
+        window.Render += _ =>
+        {
+            if (firstFrameLogged || host.FramesDrawn == 0) return;
+            firstFrameLogged = true;
+            log.Info("startup", $"first frame after {started.ElapsedMilliseconds} ms");
+        };
 
         var input = window.CreateInput();
         foreach (var kb in input.Keyboards)
@@ -82,26 +82,6 @@ public static partial class Program
                 else if (key == Key.F12) OpenFolder(log);
             };
 
-        window.FramebufferResize += size => gl.Viewport(size);
-        window.Render += delta =>
-        {
-            // Minimised: nothing to see, so spend nothing drawing it.
-            if (window.WindowState == WindowState.Minimized) return;
-            var size = window.FramebufferSize;
-            SyntheticPulse.Fill(uniforms, (float)clock.Elapsed.TotalSeconds);
-            uniforms.ResolutionX = size.X;
-            uniforms.ResolutionY = size.Y;
-            gl.Clear(ClearBufferMask.ColorBufferBit);
-            renderer.Draw(uniforms);
-
-            if (firstFrame)
-            {
-                firstFrame = false;
-                log.Info("startup", $"first frame after {started.ElapsedMilliseconds} ms");
-            }
-            if (stats.Add(delta) is { } summary)
-                log.Info("health", $"{summary}; working set {Environment.WorkingSet / (1024 * 1024)} MB");
-        };
         window.Run();
     }
 

@@ -96,3 +96,57 @@ public class GlUnavailableTests
 
 [CollectionDefinition("GL", DisableParallelization = true)]
 public class GlCollection;
+
+/// <summary>
+/// The app's real lifecycle: create, run the frame loop, close. Closing used to
+/// crash because GL objects were freed after Silk.NET had already destroyed the
+/// context at the end of Run(); they must be released while the window closes.
+/// </summary>
+[Collection("GL")]
+[Trait("Category", "GL")]
+public sealed class HostLifecycleTests : IDisposable
+{
+    private readonly string _logDir = Path.Combine(Path.GetTempPath(), "vibresia-host-" + Guid.NewGuid().ToString("N"));
+
+    [Fact]
+    public void RunsFramesThenClosesWithoutTouchingADeadContext()
+    {
+        var (window, gl, _) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: false));
+        using var log = new Log(_logDir);
+        var host = new VibescapeHost(window, gl, log, "kaleidoscope", SyntheticPulse.Fill);
+        window.Render += _ => { if (host.FramesDrawn >= 10) window.Close(); };
+
+        window.Run();
+        window.Dispose();
+
+        Assert.True(host.FramesDrawn >= 10);
+        var text = File.ReadAllText(log.FilePath);
+        Assert.Contains("closing after", text);
+        Assert.Contains("[frame] first frame:", text);
+        Assert.NotNull(host.LastSample);
+        Assert.False(host.LastSample!.LooksBlank, host.LastSample.ToString());
+    }
+
+    [Fact]
+    public void FullScreenIsABorderlessWindowCoveringTheMonitor()
+    {
+        var (window, _, _) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: true));
+        try
+        {
+            var bounds = window.Monitor!.Bounds;
+            Assert.Equal(WindowBorder.Hidden, window.WindowBorder);
+            Assert.NotEqual(WindowState.Fullscreen, window.WindowState);
+            Assert.Equal(bounds.Origin, window.Position);
+            Assert.Equal(bounds.Size, window.Size);
+        }
+        finally
+        {
+            window.Dispose();
+        }
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_logDir)) Directory.Delete(_logDir, true);
+    }
+}

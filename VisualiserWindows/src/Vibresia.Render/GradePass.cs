@@ -12,27 +12,18 @@ namespace Vibresia.Render;
 /// </summary>
 internal sealed class GradePass : IDisposable
 {
-    private static readonly float[] Quad = [-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f];
-
     private readonly GL _gl;
     private readonly ShaderProgram _program;
-    private readonly uint _vao, _vbo;
+    private readonly FullScreenQuad _quad;
     private uint _fbo, _tex;
     private int _width, _height;
     private int _previousFramebuffer;
 
-    public unsafe GradePass(GL gl)
+    public GradePass(GL gl, FullScreenQuad quad)
     {
         _gl = gl;
+        _quad = quad;
         _program = new ShaderProgram(gl, ShaderSources.GradeVertex, ShaderSources.GradeFragment);
-        _vao = gl.GenVertexArray();
-        gl.BindVertexArray(_vao);
-        _vbo = gl.GenBuffer();
-        gl.BindBuffer(BufferTargetARB.ArrayBuffer, _vbo);
-        gl.BufferData<float>(BufferTargetARB.ArrayBuffer, Quad, BufferUsageARB.StaticDraw);
-        gl.EnableVertexAttribArray(0);
-        gl.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 2 * sizeof(float), (void*)0);
-        gl.BindVertexArray(0);
     }
 
     /// <summary>Binds the scene target (resizing it if the framebuffer changed) and clears it to upstream's backdrop.</summary>
@@ -64,9 +55,7 @@ internal sealed class GradePass : IDisposable
         _program.Set("uSaturation", palette?.Saturation ?? 1f);
         _program.Set("uDuotone", palette?.Duotone ?? 0f);
         _program.Set("uLift", palette?.Lift ?? 0f);
-        _gl.BindVertexArray(_vao);
-        _gl.DrawArrays(PrimitiveType.TriangleStrip, 0, 4);
-        _gl.BindVertexArray(0);
+        _quad.Draw();
         _gl.BindTexture(TextureTarget.Texture2D, 0);
     }
 
@@ -105,7 +94,5 @@ internal sealed class GradePass : IDisposable
     {
         DeleteTarget();
         _program.Dispose();
-        _gl.DeleteBuffer(_vbo);
-        _gl.DeleteVertexArray(_vao);
     }
 }

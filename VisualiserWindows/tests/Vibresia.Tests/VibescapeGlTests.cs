@@ -1,6 +1,7 @@
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 using Vibresia.Core;
+using Vibresia.Core.Ui;
 using Vibresia.Core.Vibescapes;
 using Vibresia.Render;
 
@@ -59,7 +60,8 @@ public sealed class VibescapeGlTests : IDisposable
         u.Beat = 1;
         u.ResolutionX = W; u.ResolutionY = H;
         tweak?.Invoke(u);
-        r.Draw(u, 1 / 60.0, screen?.W ?? 0, screen?.H ?? 0, crtOpacity);
+        r.Draw(u, 1 / 60.0, screen?.W ?? 0, screen?.H ?? 0);
+        if (crtOpacity > 0) r.DrawCrt(crtOpacity, screen?.W ?? (int)u.ResolutionX, screen?.H ?? (int)u.ResolutionY);
         _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _fbo);
         var px = new byte[W * H * 4];
         _gl.ReadPixels<byte>(0, 0, W, H, PixelFormat.Rgba, PixelType.UnsignedByte, px);
@@ -190,38 +192,97 @@ public sealed class VibescapeGlTests : IDisposable
         }
     }
 
-    /// <summary>The overlay draws the status line, a notice and the open vibescape list without an ImGui or GL error, and a click target runs.</summary>
+    /// <summary>
+    /// The Mac's chrome draws its header with each drop-down open, the meter,
+    /// the footer and messages without an ImGui or GL error; its controls take
+    /// clicks and the picture doesn't; an open drop-down takes every click;
+    /// and once the pointer has gone the header slides away and stops taking clicks.
+    /// </summary>
     [Fact]
-    public void OverlayDrawsTheOpenListAndNotices()
+    public void ChromeDrawsEveryMenuAndOnlyItsControlsTakeClicks()
     {
         var (window, gl, _) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: false));
         try
         {
             using var log = new Log(_logDir);
-            var catalog = new VibescapeCatalog([new CustomVibescape("mine", "Mine", "me", "vec3 render(vec2 p, float t){return vec3(1.0);}", true)]);
-            var host = new VibescapeHost(window, gl, log, catalog.Entries[0], catalog.Entries[0], (u, _) => TestUniforms.Music(u));
+            var catalog = new VibescapeCatalog([new CustomVibescape("mine", "Mine", "Ada", "vec3 render(vec2 p, float t){return vec3(1.0);}", true)]);
+            var host = new VibescapeHost(window, gl, log, catalog.Entries[^1], catalog.Entries[0], (u, _) => TestUniforms.Music(u));
             var input = Silk.NET.Input.InputWindowExtensions.CreateInput(window);
-            var overlay = new StatusOverlay(gl, window, input);
-            host.ReleaseOnClose(overlay);
-            var picker = new PickerState();
-            picker.Open(catalog.Entries.Count, catalog.Entries.Count - 1);
+            var chrome = new MacChrome(gl, window, input, host.Scale, log);
+            host.ReleaseOnClose(chrome);
             // A '%' in untrusted text must be drawn, not read as a format directive.
-            overlay.Notice("Line 3 needs a fix: %s %n %d\nsecond line", StatusTone.Error, 10);
+            chrome.Notice("Line 3 needs a fix: %s %n %d\nsecond line", MessageSeverity.Error, 10);
+            var state = new ChromeState();
+            var inside = true;
+            var actions = new ChromeActions(_ => { }, _ => { }, _ => { }, () => { }, () => { }, () => { }, () => { });
+            var bands = Enumerable.Range(0, FrameUniforms.BandCount).Select(i => (i % 7) / 7f).ToArray();
+            var menus = new[] { ChromeMenu.Vibescape, ChromeMenu.Palette, ChromeMenu.Source, ChromeMenu.Settings, ChromeMenu.None };
             var frames = 0;
+            var headerPoint = System.Numerics.Vector2.Zero;
+            bool? controlTook = null, pictureTook = null, menuTookAnywhere = null, hiddenTook = null;
             host.Overlay += dt =>
             {
-                overlay.Show("Listening to the demo tone", StatusTone.Info);
-                overlay.Render((float)dt, new PickerView(catalog.Entries, picker, 0, _ => { }, () => { }));
-                if (frames == 3) picker.Move(1);
-                if (++frames >= 8) window.Close();
+                state.Advance(dt, () => inside, chrome.OpenMenu != ChromeMenu.None);
+                var view = new ChromeView(catalog.Entries, host.Current, 2, AudioChoice.Loopback, SourceState.Live,
+                    false, true, bands, 0.6f, "Can't hear anything: %s.", MessageSeverity.Error);
+                if (frames < menus.Length && menus[frames] != ChromeMenu.None) chrome.Open(menus[frames]);
+                chrome.Render((float)dt, view, state, actions);
+                var size = window.Size;
+                // The settings pill is the rightmost: 28 pt in from the edge, in the 30 pt header row 22 pt down.
+                headerPoint = new System.Numerics.Vector2(size.X - 40 * host.Scale.Value, (22 + 15) * host.Scale.Value);
+                if (frames == 1) menuTookAnywhere = chrome.TakesClick(new(size.X / 2f, size.Y / 2f));
+                if (frames == 5)
+                {
+                    chrome.CloseMenu();
+                    controlTook = chrome.TakesClick(headerPoint);
+                    pictureTook = chrome.TakesClick(new(size.X / 2f, size.Y / 2f));
+                    inside = false;
+                }
+                if (frames == 120) hiddenTook = chrome.TakesClick(headerPoint);
+                if (++frames >= 121) window.Close();
             };
             window.Run();
-            Assert.Equal(8, frames);
-            Assert.Equal(0, picker.Selected); // wrapped from the last row
+            Assert.Equal(121, frames);
+            Assert.True(menuTookAnywhere, "an open drop-down should take a click anywhere");
+            Assert.True(controlTook, "a header pill should take its click");
+            Assert.False(pictureTook, "a click on the picture is the vibescape's");
+            Assert.False(hiddenTook, "a hidden header takes no clicks");
+            Assert.Equal(0f, state.Shown);
+            Assert.Contains("interface fonts:", File.ReadAllText(log.FilePath));
         }
         finally
         {
             window.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// The chosen palette is what uPalette hands a shader, as upstream binds
+    /// it: Dance Floor is drawn ungraded but colours itself from uPalette, so
+    /// a palette change reaches its pixels only through the uniform.
+    /// </summary>
+    [Fact]
+    public void UPaletteFollowsTheChosenPalette()
+    {
+        using var r = new VibescapeRenderer(_gl);
+        Assert.Null(r.Use(Catalog.Find(VibescapeId.Builtin("danceFloor"))!));
+        var neon = Draw(r);
+        r.Palette = Palette.All[2]; // TOXIC: green, far from NEON's magenta
+        var toxic = Draw(r);
+        long Channel(byte[] px, int c) { long sum = 0; for (var i = c; i < px.Length; i += 4) sum += px[i]; return sum; }
+        Assert.True(Channel(toxic, 1) > Channel(neon, 1), "TOXIC should make Dance Floor greener than NEON");
+    }
+
+    /// <summary>The chosen palette grades the frame, exactly as upstream's gradeFS does with it.</summary>
+    [Fact]
+    public void TheChosenPaletteGradesTheFrame()
+    {
+        using var r = new VibescapeRenderer(_gl);
+        Assert.Null(r.Use(Custom("vec3 render(vec2 p, float t) { return vec3(0.5, 0.25, 0.75); }")));
+        foreach (var palette in Palette.All)
+        {
+            r.Palette = palette;
+            AssertPixel(Draw(r), Grade((0.5f, 0.25f, 0.75f), palette));
         }
     }
 

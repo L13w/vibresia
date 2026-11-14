@@ -6,7 +6,7 @@ namespace Vibresia.App;
 
 /// <summary>
 /// What the app asks of, and reads from, Windows itself: keeping the
-/// display awake while a vibescape plays, noticing when Windows dims or
+/// display awake while a vibescape plays (when the user turns that on), noticing when Windows dims or
 /// turns off the display anyway (so a dark screen can be explained from the
 /// log), how long since the last keyboard or mouse input, and whether the
 /// user has turned animation effects off (the Mac's Reduce Motion).
@@ -31,14 +31,15 @@ internal sealed partial class WindowsSystem : IDisposable
     }
 
     /// <summary>
-    /// Asks Windows not to dim or turn off the display while the app runs.
-    /// A difference from the Mac, whose source makes no such request: taken
-    /// because the display powering down mid-vibescape was reported as a problem.
+    /// Asks Windows not to dim or turn off the display while the app runs, or
+    /// stops asking. An option, off by default as on the Mac (whose source
+    /// makes no such request); the user turns it on from the settings menu.
     /// </summary>
-    public void KeepDisplayAwake()
+    public void KeepDisplayAwake(bool on)
     {
-        var previous = SetThreadExecutionState(EsContinuous | EsSystemRequired | EsDisplayRequired);
-        _log.Info("power", previous == 0 ? "couldn't ask Windows to keep the display awake" : "asked Windows to keep the display awake while running");
+        var previous = SetThreadExecutionState(on ? EsContinuous | EsSystemRequired | EsDisplayRequired : EsContinuous);
+        _log.Info("power", previous == 0 ? $"couldn't change whether Windows keeps the display awake (asked: {on})"
+            : on ? "asked Windows to keep the display awake while running" : "letting Windows dim and sleep the display as usual");
     }
 
     /// <summary>Logs each time Windows turns the display off, dims it, or turns it on.</summary>

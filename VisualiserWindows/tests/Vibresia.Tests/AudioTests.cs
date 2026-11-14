@@ -111,6 +111,25 @@ public class AudioAnalyzerTests
         Assert.True(a.Bass > 0, "the real signal around the bad samples still gets through");
     }
 
+    /// <summary>The audible demo tone renders at the speaker's rate; the analyser must still hear 124 bpm.</summary>
+    [Theory]
+    [InlineData(44100)]
+    [InlineData(48000)]
+    public void DemoKeepsItsTempoAtAnySampleRate(int rate)
+    {
+        var ring = new AudioRingBuffer(sampleRate: rate);
+        var analyzer = new AudioAnalyzer(ring);
+        var synth = new DemoSynth(rate);
+        var frame = new float[rate / 60];
+        for (var f = 0; f < 15 * 60; f++)
+        {
+            synth.Render(frame);
+            ring.Write(frame);
+            analyzer.Tick();
+        }
+        Assert.InRange(analyzer.Bpm, DemoTone.Bpm * 0.95, DemoTone.Bpm * 1.05);
+    }
+
     [Fact]
     public void DemoToneDrivesBeatsAndTempo()
     {
@@ -257,6 +276,23 @@ public class AudioPipelineTests : IDisposable
     }
 
     [Fact]
+    public void StoppingLeavesNoSourceAndRestingVisuals()
+    {
+        using var log = new Log(_dir);
+        using var pipe = new AudioPipeline(log);
+        var src = new FakeSource();
+        var u = new FrameUniforms();
+        pipe.Use(src);
+        src.Feed(t => AnalyserRig.Sine(t, 200), 30, () => pipe.Tick(u, 1 / 60.0));
+        pipe.Stop();
+        Assert.Equal(AudioStatus.None, pipe.Status);
+        Assert.Null(pipe.Source);
+        Assert.Equal(1, src.Stops);
+        for (var i = 0; i < 60; i++) pipe.Tick(u, 1 / 60.0);
+        Assert.Equal(1f, u.Idle);
+    }
+
+    [Fact]
     public void ACaptureFailureIsShownLoggedAndStillsTheVisuals()
     {
         using var log = new Log(_dir);
@@ -398,58 +434,48 @@ public class RealFftTests
 public class AudioStatusMessageTests
 {
     [Fact]
-    public void FailureIsAnErrorAndOffersTheDemoOnlyWhenThereIsOne()
+    public void FailureIsAnErrorAndOffersTheDemoOnlyWhenNotAlreadyOnIt()
     {
-        var (text, sev) = AudioStatusMessage.For(AudioStatus.Failed, "device gone", "PC sound", false, canSwitch: true, false);
+        var (text, sev) = AudioStatusMessage.For(AudioStatus.Failed, "device gone", onDemo: false);
         Assert.Equal(MessageSeverity.Error, sev);
-        Assert.Contains("device gone", text);
+        Assert.Contains("device gone.", text);
         Assert.Contains("press D", text, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("press D", AudioStatusMessage.For(AudioStatus.Failed, "x", "y", false, canSwitch: false, false).Text!, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("menu at the top right", text);
+        Assert.DoesNotContain("press D", AudioStatusMessage.For(AudioStatus.Failed, "x.", onDemo: true).Text!, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("..", AudioStatusMessage.For(AudioStatus.Failed, "x.", onDemo: true).Text!);
     }
 
-    [Fact]
-    public void SilenceIsAHintOnLoopbackButAnErrorOnTheDemo()
-    {
-        Assert.Equal(MessageSeverity.Hint, AudioStatusMessage.For(AudioStatus.NothingPlaying, null, "PC sound", onDemo: false, true, false).Severity);
-        Assert.Equal(MessageSeverity.Error, AudioStatusMessage.For(AudioStatus.NothingPlaying, null, "Demo tone", onDemo: true, true, false).Severity);
-    }
+    /// <summary>As on the Mac: silence and a running source say nothing; the header says which source is running.</summary>
+    [Theory]
+    [InlineData(AudioStatus.Playing, false)]
+    [InlineData(AudioStatus.NothingPlaying, false)]
+    [InlineData(AudioStatus.NothingPlaying, true)]
+    public void SilenceAndPlayingSayNothing(AudioStatus status, bool onDemo) =>
+        Assert.Null(AudioStatusMessage.For(status, null, onDemo).Text);
 
     [Fact]
-    public void PlayingSaysNothingUnlessASourceJustStarted()
+    public void NoSourceAsksForOne()
     {
-        Assert.Null(AudioStatusMessage.For(AudioStatus.Playing, null, "PC sound", false, true, announce: false).Text);
-        Assert.Equal("Listening to PC sound (D switches)", AudioStatusMessage.For(AudioStatus.Playing, null, "PC sound", false, true, announce: true).Text);
+        var (text, sev) = AudioStatusMessage.For(AudioStatus.None, null, onDemo: false);
+        Assert.Equal(MessageSeverity.Hint, sev);
+        Assert.Contains("menu at the top right", text);
     }
 }
 
 public class SourceToggleTests
 {
-    private sealed class Named(string name) : IAudioSource
-    {
-        public string Name => name;
-        public string FormatInfo => "";
-        public event Action<string>? Failed { add { } remove { } }
-        public event Action? DeviceChanged { add { } remove { } }
-        public void Start(AudioRingBuffer ring) { }
-        public void Stop() { }
-        public void Dispose() { }
-    }
-
     [Fact]
-    public void SwitchesBetweenLoopbackAndDemoByIdentity()
+    public void SwitchesBetweenSystemAudioAndTheDemo()
     {
-        var demo = new Named("Demo tone");
-        var loop = new Named("Demo tone"); // same display name: identity, not name, must decide
-        Assert.Same(loop, SourceToggle.Next(demo, demo, loop));
-        Assert.Same(demo, SourceToggle.Next(loop, demo, loop));
-        Assert.Same(demo, SourceToggle.Next(null, demo, loop));
+        Assert.Equal(AudioChoice.Loopback, SourceToggle.Next(AudioChoice.Demo, hasLoopback: true));
+        Assert.Equal(AudioChoice.Demo, SourceToggle.Next(AudioChoice.Loopback, hasLoopback: true));
+        Assert.Equal(AudioChoice.Demo, SourceToggle.Next(AudioChoice.Microphone, hasLoopback: true));
     }
 
     [Fact]
     public void WithoutLoopbackItStaysOnTheDemo()
     {
-        var demo = new Named("d");
-        Assert.Same(demo, SourceToggle.Next(demo, demo, null));
-        Assert.Same(demo, SourceToggle.Next(null, demo, null));
+        Assert.Equal(AudioChoice.Demo, SourceToggle.Next(AudioChoice.Demo, hasLoopback: false));
+        Assert.Equal(AudioChoice.Demo, SourceToggle.Next(AudioChoice.Loopback, hasLoopback: false));
     }
 }

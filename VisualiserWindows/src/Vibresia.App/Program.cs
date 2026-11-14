@@ -4,6 +4,7 @@ using Silk.NET.Input;
 using Silk.NET.Windowing;
 using Vibresia.Core;
 using Vibresia.Core.Audio;
+using Vibresia.Core.Ui;
 using Vibresia.Core.Vibescapes;
 using Vibresia.Render;
 
@@ -11,10 +12,7 @@ namespace Vibresia.App;
 
 public static partial class Program
 {
-    /// <summary>How long a custom vibescape's compile error stays on screen.</summary>
-    private const double ErrorSeconds = 10;
-    /// <summary>How long a vibescape's name shows after switching to it.</summary>
-    private const double TitleSeconds = 2.5;
+    private const double ErrorSeconds = AppController.ErrorSeconds;
 
     public static int Main(string[] args)
     {
@@ -40,7 +38,7 @@ public static partial class Program
                                 $"{RuntimeInformation.OSDescription} {RuntimeInformation.OSArchitecture}");
             try
             {
-                Run(log, windowed: args.Contains("--windowed"));
+                Run(log, args);
                 log.Info("startup", "exited normally");
                 return 0;
             }
@@ -59,14 +57,16 @@ public static partial class Program
         }
     }
 
-    private static void Run(Log log, bool windowed)
+    private static void Run(Log log, string[] args)
     {
         var started = Stopwatch.StartNew();
-        var (window, gl, info) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: !windowed));
+        // The Mac opens in a window, and so does this; --fullscreen starts full screen.
+        var fullScreen = args.Contains("--fullscreen");
+        var (window, gl, info) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: fullScreen));
         using var _ = window;
         log.Info("gpu", info.ToString());
-        log.Info("startup", $"window up after {started.ElapsedMilliseconds} ms; {(windowed ? "windowed" : "borderless full screen, 1 px taller than the monitor")}; " +
-                            $"monitor {window.Monitor?.Name}: full {MonitorArea.Primary()?.Size}, work area {window.Monitor?.Bounds.Size}; framebuffer {window.FramebufferSize}");
+        log.Info("startup", $"window up after {started.ElapsedMilliseconds} ms; {(fullScreen ? "borderless full screen, 1 px taller than the monitor" : $"windowed at {window.Size}")}; " +
+                            $"monitor {window.Monitor?.Name}: full {MonitorArea.Containing(window)?.Size}, work area {window.Monitor?.Bounds.Size}; framebuffer {window.FramebufferSize}");
 
         var settings = Settings.Load(Settings.DefaultPath(), log);
         var customFolder = CustomVibescapeLoader.DefaultFolder();
@@ -74,8 +74,6 @@ public static partial class Program
 
         using var sources = new AudioSources();
         using var audio = new AudioPipeline(log);
-        audio.Use(settings.Audio == AudioChoice.Demo || !sources.HasLoopback ? sources.Demo : sources.Preferred);
-
         var marker = new SessionMarker(SessionMarker.DefaultPath());
         var unclean = marker.Begin(log);
         var fallback = catalog.Find(VibescapeCatalog.Default)!;
@@ -94,16 +92,24 @@ public static partial class Program
         }
         var pointer = new PointerInput();
         VibescapeHost? hostRef = null;
+        FrameUniforms? lastUniforms = null;
         var host = new VibescapeHost(window, gl, log, start ?? fallback, fallback, (u, dt) =>
         {
             audio.Tick(u, dt);
             pointer.Fill(u, dt);
+            lastUniforms = u;
             if (hostRef is not null) hostRef.SourceLive = audio.Status is AudioStatus.Playing or AudioStatus.NothingPlaying;
         });
         hostRef = host;
+
+        // The Mac starts on NEON every launch and doesn't remember the palette; --palette N picks one, as on the Mac.
+        var paletteIndex = 0;
+        if (Array.IndexOf(args, "--palette") is var pi and >= 0 && pi + 1 < args.Length && int.TryParse(args[pi + 1], out var asked))
+            paletteIndex = asked >= 0 && asked < Palette.All.Count ? asked : 0;
 #if WINDOWS
         using var windows = new WindowsSystem(log);
-        windows.KeepDisplayAwake();
+        if (settings.KeepDisplayAwake) windows.KeepDisplayAwake(true);
+        else log.Info("power", "Windows may dim and sleep the display as usual (keep-awake is off)");
         windows.WatchDisplay();
         host.ReduceMotion = WindowsSystem.AnimationsOff();
         host.HealthExtra = () => $"input idle {WindowsSystem.InputIdleSeconds():F0} s";
@@ -118,69 +124,34 @@ public static partial class Program
         };
 
         var input = window.CreateInput();
-        var overlay = new StatusOverlay(gl, window, input);
-        host.ReleaseOnClose(overlay);
+        var chrome = new MacChrome(gl, window, input, host.Scale, log);
+        host.ReleaseOnClose(chrome);
         if (startNotice is not null)
-            overlay.Notice(startNotice, StatusTone.Hint, ErrorSeconds);
+            chrome.Notice(startNotice, MessageSeverity.Hint, ErrorSeconds);
         else if (host.StartupProblem is { } failed)
-            overlay.Notice($"{failed.Entry.Title} didn't load, so this is {host.Current.Title}.\n{failed.Problem.ForScreen()}", StatusTone.Error, ErrorSeconds);
-        else
-            overlay.Notice(host.Current.Title, StatusTone.Info, TitleSeconds);
+            chrome.Notice($"{failed.Entry.Title} didn't load, so this is {host.Current.Title}.\n{failed.Problem.ForScreen()}", MessageSeverity.Error, ErrorSeconds);
+        var windowMode = new WindowMode(window, fullScreen);
+        var app = new AppController(log, window, settings, customFolder, catalog, sources, audio, host, chrome, windowMode, paletteIndex,
+#if WINDOWS
+            keepAwake: windows.KeepDisplayAwake);
+#else
+            keepAwake: _ => { });
+#endif
+        app.StartAtLaunch();
 
-        void Remember()
-        {
-            settings.Vibescape = host.Current.Id;
-            settings.Audio = ReferenceEquals(audio.Source, sources.Demo) ? AudioChoice.Demo : AudioChoice.Loopback;
-            settings.Save(log);
-        }
-
-        void Switch(VibescapeEntry entry)
-        {
-            if (host.Show(entry) is { } problem)
-                overlay.Notice($"{entry.Title} didn't load.\n{problem.ForScreen()}", StatusTone.Error, ErrorSeconds);
-            else
-            {
-                overlay.Notice(entry.Title, StatusTone.Info, TitleSeconds);
-                Remember();
-            }
-        }
-
-        var picker = new PickerState();
-        void OpenPicker()
-        {
-            // Rescan, so a file copied into the folder shows up without a restart.
-            catalog = new VibescapeCatalog(CustomVibescapeLoader.LoadAll(customFolder, log));
-            picker.Open(catalog.Entries.Count, catalog.IndexOf(host.Current.Id));
-        }
-        void Choose(int index)
-        {
-            picker.Close();
-            if (index >= 0 && index < catalog.Entries.Count) Switch(catalog.Entries[index]);
-        }
-        var pickerView = () => new PickerView(catalog.Entries, picker, catalog.IndexOf(host.Current.Id), Choose,
-            () => OpenFolder(customFolder, log));
-
-        var announceUntil = 4.0; // seconds of "listening to …" after a source starts
-        var elapsed = 0.0;
+        var chromeState = new ChromeState();
         host.Overlay += dt =>
         {
-            elapsed += dt;
-            var (text, severity) = AudioStatusMessage.For(audio.Status, audio.FailureMessage, audio.SourceName,
-                onDemo: ReferenceEquals(audio.Source, sources.Demo), canSwitch: sources.HasLoopback,
-                announce: elapsed < announceUntil);
-            overlay.Show(text, severity switch
-            {
-                MessageSeverity.Error => StatusTone.Error,
-                MessageSeverity.Hint => StatusTone.Hint,
-                _ => StatusTone.Info,
-            });
-            overlay.Render((float)dt, picker.IsOpen ? pickerView() : null);
+            chromeState.Advance(dt, () => WindowPointer.IsInside(window), chrome.OpenMenu != ChromeMenu.None);
+            chrome.Render((float)dt, app.View(lastUniforms ?? new FrameUniforms()), chromeState, app.Actions);
+            app.AfterRender();
         };
 
         foreach (var mouse in input.Mice)
         {
             mouse.MouseMove += (_, pos) => pointer.Move(pos.X, pos.Y, window.Size.X, window.Size.Y);
-            mouse.MouseDown += (_, _) => pointer.Down = true;
+            // A click on the interface (or anywhere while a drop-down is open) is the interface's, not the vibescape's.
+            mouse.MouseDown += (m, _) => pointer.Down = !chrome.TakesClick(m.Position);
             mouse.MouseUp += (_, _) => pointer.Down = false;
         }
         foreach (var kb in input.Keyboards)
@@ -188,57 +159,16 @@ public static partial class Program
             // Watched, not taken (as upstream): the app's own keys still work, and the vibescape sees them too.
             kb.KeyChar += (_, c) => pointer.Typed(c);
             kb.KeyUp += (_, _, _) => pointer.KeyDown = false;
-        }
-
-        foreach (var kb in input.Keyboards)
             kb.KeyDown += (_, key, _) =>
             {
                 pointer.KeyDown = true;
-                if (picker.IsOpen)
-                {
-                    switch (key)
-                    {
-                        case Key.Escape or Key.Tab: picker.Close(); break;
-                        case Key.Up: picker.Move(-1); break;
-                        case Key.Down: picker.Move(1); break;
-                        case Key.Enter or Key.KeypadEnter: Choose(picker.Selected); break;
-                    }
-                    return;
-                }
-                switch (key)
-                {
-                    case Key.Escape: window.Close(); break;
-                    case Key.F12: OpenFolder(log.Directory, log); break;
-                    case Key.Tab: OpenPicker(); break;
-                    case Key.Right: Switch(catalog.Step(host.Current.Id, 1)); break;
-                    case Key.Left: Switch(catalog.Step(host.Current.Id, -1)); break;
-                    case >= Key.Number0 and <= Key.Number9 when catalog.ForShortcut((char)('0' + (key - Key.Number0))) is { } picked:
-                        Switch(picked);
-                        break;
-                    case Key.D:
-                        audio.Use(SourceToggle.Next(audio.Source, sources.Demo, sources.Loopback));
-                        announceUntil = elapsed + 4.0;
-                        Remember();
-                        break;
-                }
+                var (command, shortcut) = KeyCommands.For(key, chrome.OpenMenu != ChromeMenu.None);
+                app.Execute(command, shortcut);
             };
+        }
 
         window.Run();
         marker.End(log);
-    }
-
-    private static void OpenFolder(string folder, Log log)
-    {
-        if (!OperatingSystem.IsWindows()) return;
-        try
-        {
-            Directory.CreateDirectory(folder);
-            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{folder}\"") { UseShellExecute = true });
-        }
-        catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException)
-        {
-            log.Warn("ui", $"couldn't open {folder}: {e.Message}");
-        }
     }
 
     private static void ShowError(string message)

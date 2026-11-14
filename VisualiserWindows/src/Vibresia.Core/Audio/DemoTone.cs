@@ -5,8 +5,10 @@ namespace Vibresia.Core.Audio;
 /// <summary>
 /// A synthetic track — a sweeping pad over a 124 bpm kick, upstream's
 /// DemoTone recipe — so the visuals can be checked with nothing playing.
-/// Unlike upstream's it is silent: samples go straight into the ring buffer,
-/// never to the speakers, so it can be left on without anyone hearing it.
+/// This is the silent form: samples go straight into the ring buffer, never
+/// to the speakers. The Windows build plays the demo tone aloud as the Mac
+/// does, and falls back to this when there is no output device to play it on;
+/// the Linux build has only this.
 /// </summary>
 public sealed class DemoTone : IAudioSource
 {
@@ -62,14 +64,17 @@ public sealed class DemoTone : IAudioSource
     public void Dispose() => Stop();
 }
 
-/// <summary>The demo track's sample generator, separate so tests can render it without a thread.</summary>
-public sealed class DemoSynth
+/// <summary>The demo track's sample generator, separate so tests can render it without a thread, and so it can render at a speaker's own rate.</summary>
+public sealed class DemoSynth(double sampleRate = DemoTone.SampleRate)
 {
     private double _phasePad, _phaseSub, _kickPhase, _kickEnv, _nextKick, _t;
 
+    public double SampleRate => sampleRate;
+
     public void Render(Span<float> output)
     {
-        const double twoPi = 2 * Math.PI, sr = DemoTone.SampleRate, interval = 60.0 / DemoTone.Bpm;
+        const double twoPi = 2 * Math.PI, interval = 60.0 / DemoTone.Bpm;
+        var sr = sampleRate;
         for (var i = 0; i < output.Length; i++)
         {
             var t = _t + i / sr;

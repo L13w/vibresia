@@ -12,7 +12,7 @@ public static class GlWindow
     {
         var o = WindowOptions.Default with
         {
-            Title = "Vibresia",
+            Title = "VIBRESIA", // the Mac's window title
             Size = new Vector2D<int>(1280, 720),
             IsVisible = visible,
             VSync = true,
@@ -47,11 +47,13 @@ public static class GlWindow
 
         var window = Window.Create(options);
         window.Initialize();
-        if (options.WindowBorder == WindowBorder.Hidden && MonitorArea.Primary() is { } screen)
+        if (options.WindowBorder == WindowBorder.Hidden && MonitorArea.Containing(window) is { } screen)
         {
             window.Position = screen.Origin;
             window.Size = screen.Size + new Vector2D<int>(0, 1);
         }
+        else if (options.WindowBorder != WindowBorder.Hidden)
+            WindowMode.PlaceWindowed(window, MonitorArea.ContentScale(window));
 
         var gl = GL.GetApi(window);
         var info = GlInfo.Query(gl);

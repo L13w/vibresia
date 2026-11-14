@@ -282,6 +282,30 @@ public sealed class SettingsTests : IDisposable
     }
 
     [Fact]
+    public void TheMicrophoneAndKeepAwakeRoundTripAndKeepAwakeIsOffByDefault()
+    {
+        using var log = NewLog();
+        var s = Settings.Load(PathName, log);
+        Assert.False(s.KeepDisplayAwake);
+        s.Audio = AudioChoice.Microphone;
+        s.KeepDisplayAwake = true;
+        s.Save(log);
+        var back = Settings.Load(PathName, log);
+        Assert.Equal(AudioChoice.Microphone, back.Audio);
+        Assert.True(back.KeepDisplayAwake);
+        Assert.Equal("microphone", (string)JsonNode.Parse(File.ReadAllText(PathName))!["audio"]!);
+    }
+
+    [Fact]
+    public void AKeepAwakeOfTheWrongTypeMeansOff()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(PathName, """{"version":1,"keepDisplayAwake":"yes"}""");
+        using var log = NewLog();
+        Assert.False(Settings.Load(PathName, log).KeepDisplayAwake);
+    }
+
+    [Fact]
     public void UnknownKeysSurviveASave()
     {
         Directory.CreateDirectory(_dir);
@@ -364,32 +388,6 @@ public class BuiltinStateTests
         Assert.Equal(0.15, s.SpriteClock, 6);
         s.Advance("hamster", Frame(active: 0.5f), 0.5); // dt capped at 0.1, no tempo = 1x
         Assert.Equal(0.2, s.SpriteClock, 6);
-    }
-}
-
-public class PickerStateTests
-{
-    [Fact]
-    public void OpensOnTheCurrentRowAndWraps()
-    {
-        var p = new PickerState();
-        p.Open(5, 3);
-        Assert.True(p.IsOpen);
-        Assert.Equal(3, p.Selected);
-        p.Move(2);
-        Assert.Equal(0, p.Selected);
-        p.Move(-1);
-        Assert.Equal(4, p.Selected);
-        p.Close();
-        Assert.False(p.IsOpen);
-    }
-
-    [Fact]
-    public void AnUnknownCurrentOpensOnTheFirstRow()
-    {
-        var p = new PickerState();
-        p.Open(5, -1);
-        Assert.Equal(0, p.Selected);
     }
 }
 

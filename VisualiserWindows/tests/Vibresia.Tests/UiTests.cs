@@ -1,0 +1,275 @@
+using Silk.NET.Input;
+using Vibresia.Core;
+using Vibresia.Core.Audio;
+using Vibresia.Core.Ui;
+using Vibresia.Core.Vibescapes;
+using Vibresia.Render;
+
+namespace Vibresia.Tests;
+
+public class PaletteTests
+{
+    [Fact]
+    public void TheFivePalettesAreUpstreamsInPickerOrder()
+    {
+        Assert.Equal(["NEON", "EMBER", "TOXIC", "ABYSS", "MONO"], Palette.All.Select(p => p.Name));
+        Assert.Same(Palette.Neon, Palette.All[0]);
+        // Spot-checked against Palette.swift.
+        var abyss = Palette.All[3];
+        Assert.Equal((0.00f, 0.02f, 0.11f), abyss.Shadow);
+        Assert.Equal((0.56f, 0.86f, 1.00f), abyss.Highlight);
+        Assert.Equal((1.05f, 0.78f, 0.32f), (abyss.Saturation, abyss.Duotone, abyss.Lift));
+        Assert.Equal((0f, 0f, 0.08f), (Palette.All[4].Saturation, Palette.All[4].Duotone, Palette.All[4].Lift));
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(5)]
+    public void AnIndexOutOfRangeIsNeonAsUpstream(int index) => Assert.Same(Palette.Neon, Palette.At(index));
+}
+
+public class LayoutTierTests
+{
+    [Theory]
+    [InlineData(1400, LayoutTier.Wide, true, true)]
+    [InlineData(1100, LayoutTier.Wide, true, true)]
+    [InlineData(1099, LayoutTier.Compact, true, true)]
+    [InlineData(880, LayoutTier.Compact, true, true)]
+    [InlineData(879, LayoutTier.Narrow, false, true)]
+    [InlineData(620, LayoutTier.Narrow, false, true)]
+    [InlineData(619, LayoutTier.Tiny, false, false)]
+    public void TiersFollowUpstreamsWidths(double points, LayoutTier tier, bool text, bool pills)
+    {
+        Assert.Equal(tier, Layout.ForWidth(points));
+        Assert.Equal(text, tier.ShowsPillText());
+        Assert.Equal(pills, tier.ShowsPills());
+    }
+}
+
+public class ChromeStateTests
+{
+    private const double Frame = 1 / 60.0;
+
+    private static void Run(ChromeState c, double seconds, bool inside, bool menu = false)
+    {
+        for (var t = 0.0; t < seconds; t += Frame) c.Advance(Frame, () => inside, menu);
+    }
+
+    [Fact]
+    public void StartsShownAndHidesHalfASecondAfterThePointerLeaves()
+    {
+        var c = new ChromeState();
+        Assert.True(c.Visible);
+        Assert.Equal(1f, c.Shown);
+        Run(c, 0.45, inside: false);
+        Assert.True(c.PointerInside); // not yet: away counts from the first poll that found it gone
+        Run(c, 0.4, inside: false);
+        Assert.False(c.PointerInside);
+        Assert.False(c.Visible);
+        Assert.True(c.Shown is > 0 and < 1, $"mid-slide {c.Shown}");
+        Run(c, ChromeState.SlideSeconds, inside: false);
+        Assert.Equal(0f, c.Shown);
+    }
+
+    [Fact]
+    public void AnOpenDropDownKeepsItUp()
+    {
+        var c = new ChromeState();
+        Run(c, 2, inside: false, menu: true);
+        Assert.False(c.PointerInside);
+        Assert.True(c.Visible);
+        Assert.Equal(1f, c.Shown);
+    }
+
+    [Fact]
+    public void ComingBackShowsItAtTheNextPollAndEasesIn()
+    {
+        var c = new ChromeState();
+        Run(c, 2, inside: false);
+        Run(c, ChromeState.PollSeconds + Frame, inside: true);
+        Assert.True(c.Visible);
+        Run(c, ChromeState.SlideSeconds, inside: true);
+        Assert.Equal(1f, c.Shown);
+    }
+
+    [Fact]
+    public void ABriefExitDoesNotHideIt()
+    {
+        var c = new ChromeState();
+        Run(c, 0.3, inside: false);
+        Run(c, 0.2, inside: true);
+        Run(c, 0.3, inside: false);
+        Assert.True(c.Visible);
+    }
+}
+
+public class MeterBarsTests
+{
+    [Fact]
+    public void EachBarIsTheLouderOfItsBandAndTheNextScaledAndCapped()
+    {
+        var bands = new float[FrameUniforms.BandCount]; // 96 bands → one band per step
+        bands[10] = 0.5f;
+        bands[40] = 0.95f;
+        var h = MeterBars.Heights(bands);
+        Assert.Equal(MeterBars.Count, h.Length);
+        Assert.Equal(0.55f, h[10], 4);
+        Assert.Equal(0.55f, h[9], 4);  // its neighbour above reaches into it
+        Assert.Equal(0f, h[11]);
+        Assert.Equal(1f, h[40]);       // 0.95 × 1.1 is capped at the panel
+        Assert.All(MeterBars.Heights([]), v => Assert.Equal(0f, v));
+    }
+
+    [Fact]
+    public void ThirdsAndTheBeatTint()
+    {
+        Assert.Equal(0, MeterBars.Third(0));
+        Assert.Equal(0, MeterBars.Third(20));
+        Assert.Equal(1, MeterBars.Third(21));
+        Assert.Equal(1, MeterBars.Third(41));
+        Assert.Equal(2, MeterBars.Third(42));
+        Assert.Equal(0f, MeterBars.BeatTint(0.05f));
+        Assert.Equal(0.18f, MeterBars.BeatTint(1f), 4);
+    }
+}
+
+public class SourcePillTests
+{
+    [Theory]
+    [InlineData(AudioStatus.Playing, AudioChoice.Loopback, SourceState.Live, "SYSTEM AUDIO")]
+    [InlineData(AudioStatus.NothingPlaying, AudioChoice.Loopback, SourceState.Live, "SYSTEM AUDIO")]
+    [InlineData(AudioStatus.Playing, AudioChoice.Microphone, SourceState.Live, "MICROPHONE")]
+    [InlineData(AudioStatus.Playing, AudioChoice.Demo, SourceState.Demo, "DEMO TONE")]
+    [InlineData(AudioStatus.Failed, AudioChoice.Loopback, SourceState.Error, "SYSTEM AUDIO FAILED")]
+    [InlineData(AudioStatus.Failed, AudioChoice.Microphone, SourceState.Error, "MIC FAILED")]
+    public void StateAndTitleFollowWhatIsFlowing(AudioStatus status, AudioChoice running, SourceState state, string title)
+    {
+        Assert.Equal(state, SourcePill.State(status, running));
+        Assert.Equal(title, SourcePill.Title(state, running));
+    }
+
+    [Fact]
+    public void ARememberedMicrophoneThatWasNotStartedIsIdle()
+    {
+        var state = SourcePill.State(AudioStatus.None, null);
+        Assert.Equal(SourceState.Idle, state);
+        Assert.Equal("IDLE", SourcePill.Title(state, AudioChoice.Microphone));
+    }
+
+    [Fact]
+    public void TheMenuIsUpstreamsInOrder()
+    {
+        Assert.Equal([AudioChoice.Loopback, AudioChoice.Microphone, AudioChoice.Demo], SourcePill.Choices);
+        Assert.Equal(["Share System Audio", "Use Microphone", "Use Demo Tone"], SourcePill.Choices.Select(SourcePill.MenuTitle));
+        Assert.Equal("Spotify, YouTube, anything playing", SourcePill.Subtitle(AudioChoice.Loopback));
+    }
+}
+
+public class KeyCommandsTests
+{
+    [Theory]
+    [InlineData(Key.Escape, false, AppCommand.Quit)]
+    [InlineData(Key.Escape, true, AppCommand.CloseMenu)]
+    [InlineData(Key.F11, false, AppCommand.ToggleFullScreen)]
+    [InlineData(Key.F12, false, AppCommand.OpenLogFolder)]
+    [InlineData(Key.Right, false, AppCommand.Next)]
+    [InlineData(Key.Left, true, AppCommand.Previous)]
+    [InlineData(Key.D, false, AppCommand.ToggleDemo)]
+    [InlineData(Key.Tab, false, AppCommand.None)]
+    [InlineData(Key.A, false, AppCommand.None)]
+    public void KeysMapToCommands(Key key, bool menuOpen, AppCommand expected) =>
+        Assert.Equal(expected, KeyCommands.For(key, menuOpen).Command);
+
+    [Fact]
+    public void DigitsPickByShortcut()
+    {
+        Assert.Equal((AppCommand.Pick, '1'), KeyCommands.For(Key.Number1, false));
+        Assert.Equal((AppCommand.Pick, '0'), KeyCommands.For(Key.Number0, true));
+    }
+}
+
+public class CreditTests
+{
+    [Theory]
+    [InlineData("Minith Labs", null)]
+    [InlineData("minith labs ", null)]
+    [InlineData("  ", null)]
+    [InlineData("Ada ", "Ada")]
+    public void OnlySomeoneElsesNameIsCredited(string author, string? expected) =>
+        Assert.Equal(expected, MacChrome.Credit(new VibescapeEntry(VibescapeId.Custom("x"), "X", author, "body")));
+
+    [Fact]
+    public void BuiltInsAreNeverCredited() =>
+        Assert.All(new VibescapeCatalog([]).Entries, e => Assert.Null(MacChrome.Credit(e)));
+}
+
+public sealed class SourceSelectionTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "vibresia-source-" + Guid.NewGuid().ToString("N"));
+    private string PathName => Path.Combine(_dir, Settings.FileName);
+    private Log NewLog() => new(Path.Combine(_dir, "logs"));
+
+    private Settings With(AudioChoice audio, Log log)
+    {
+        var s = Settings.Load(PathName, log);
+        s.Audio = audio;
+        return s;
+    }
+
+    [Fact]
+    public void ARememberedMicrophoneIsNotStartedAtLaunchAndStaysChosen()
+    {
+        using var log = NewLog();
+        var selection = new SourceSelection(With(AudioChoice.Microphone, log), hasLoopback: true);
+        Assert.Null(selection.AtLaunch());
+        Assert.Equal(AudioChoice.Microphone, selection.Chosen); // the menu still ticks it
+        using var pipe = new AudioPipeline(log);
+        Assert.Equal(AudioStatus.None, pipe.Status);           // nothing started: the pill reads IDLE
+    }
+
+    [Theory]
+    [InlineData(AudioChoice.Loopback, true, AudioChoice.Loopback)]
+    [InlineData(AudioChoice.Loopback, false, AudioChoice.Demo)]
+    [InlineData(AudioChoice.Demo, true, AudioChoice.Demo)]
+    public void LaunchStartsTheRememberedSourceOrTheDemoWhereSystemAudioCantBeCaptured(AudioChoice remembered, bool hasLoopback, AudioChoice started)
+    {
+        using var log = NewLog();
+        var selection = new SourceSelection(With(remembered, log), hasLoopback);
+        Assert.Equal(started, selection.AtLaunch());
+        Assert.Equal(started, selection.Chosen);
+    }
+
+    [Fact]
+    public void PickingAndTheDKeyChangeWhatIsSaved()
+    {
+        using var log = NewLog();
+        var settings = With(AudioChoice.Loopback, log);
+        var selection = new SourceSelection(settings, hasLoopback: true);
+        Assert.Equal(AudioChoice.Demo, selection.ToggleDemo());
+        settings.Save(log);
+        Assert.Equal(AudioChoice.Demo, Settings.Load(PathName, log).Audio);
+        Assert.Equal(AudioChoice.Loopback, selection.ToggleDemo());
+        Assert.Equal(AudioChoice.Microphone, selection.Pick(AudioChoice.Microphone));
+        settings.Save(log);
+        Assert.Equal(AudioChoice.Microphone, Settings.Load(PathName, log).Audio);
+    }
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_dir)) Directory.Delete(_dir, true);
+    }
+}
+
+public class OpenEdgeTests
+{
+    [Fact]
+    public void FiresOnlyOnTheFrameItOpens()
+    {
+        var edge = new OpenEdge();
+        Assert.False(edge.Update(false));
+        Assert.True(edge.Update(true));
+        Assert.False(edge.Update(true));
+        Assert.False(edge.Update(false));
+        Assert.True(edge.Update(true));
+    }
+}

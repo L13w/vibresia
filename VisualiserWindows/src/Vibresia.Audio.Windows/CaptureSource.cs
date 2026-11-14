@@ -6,21 +6,34 @@ using Vibresia.Core.Audio;
 namespace Vibresia.Audio.Windows;
 
 /// <summary>
-/// Captures whatever the PC is playing through its default output device
-/// (WASAPI loopback). Restartable: the pipeline stops and starts it again
-/// when Windows switches the default device (headphones plugged in), which
-/// would otherwise leave capture listening to a device nothing plays through.
+/// Captures, through WASAPI, either whatever the PC is playing through its
+/// default output device (loopback: the Mac's system audio) or the default
+/// microphone. Restartable: the pipeline stops and starts it again when
+/// Windows switches the default device (headphones plugged in), which would
+/// otherwise leave capture listening to a device nothing goes through.
 /// </summary>
 [SupportedOSPlatform("windows")]
-public sealed class LoopbackSource : IAudioSource
+public sealed class CaptureSource : IAudioSource
 {
     private readonly MMDeviceEnumerator _devices = new();
+    private readonly bool _loopback;
     private MMDevice? _device;
 
+    /// <summary>What the PC is playing.</summary>
+    public static CaptureSource Loopback() => new(loopback: true);
+
+    /// <summary>The default recording device.</summary>
+    public static CaptureSource Microphone() => new(loopback: false);
+
+    private DataFlow Flow => _loopback ? DataFlow.Render : DataFlow.Capture;
+    // Recording's "Default Device" is the Console role; playback follows Multimedia.
+    private Role DeviceRole => _loopback ? Role.Multimedia : Role.Console;
+
     /// <summary>
-    /// The playback device's volume slider and mute. Whether loopback capture
-    /// is taken before or after this volume varies by driver, so it is logged
-    /// beside the measured loudness rather than assumed.
+    /// The device's volume slider and mute, logged beside the measured
+    /// loudness. For loopback it varies by driver whether capture is taken
+    /// before or after this volume (on the owner's PC, before: the level was
+    /// the same at 4% and 72%); for a microphone it is the recording level.
     /// </summary>
     public string? LevelInfo
     {
@@ -29,7 +42,7 @@ public sealed class LoopbackSource : IAudioSource
             try
             {
                 var v = _device?.AudioEndpointVolume;
-                return v is null ? null : $"Windows volume {v.MasterVolumeLevelScalar * 100:F0}%{(v.Mute ? ", muted" : "")}";
+                return v is null ? null : $"Windows {(_loopback ? "volume" : "mic level")} {v.MasterVolumeLevelScalar * 100:F0}%{(v.Mute ? ", muted" : "")}";
             }
             catch (System.Runtime.InteropServices.COMException)
             {
@@ -45,35 +58,39 @@ public sealed class LoopbackSource : IAudioSource
     private float[] _mono = new float[4096];
     private bool _stopping;
 
-    public string Name { get; private set; } = "PC sound";
+    public string Name { get; private set; }
     public string FormatInfo { get; private set; } = "not started";
 
     public event Action<string>? Failed;
     public event Action? DeviceChanged;
 
-    public LoopbackSource()
+    private CaptureSource(bool loopback)
     {
+        _loopback = loopback;
+        Name = loopback ? "PC sound" : "Microphone";
         // Raised on a COM thread; the pipeline only sets a flag and acts on the render thread.
         _notifications = _devices.CreateNotificationClient(useSynchronizationContext: false);
         _notifications.DefaultDeviceChanged += (_, e) =>
         {
-            if (e.Flow == DataFlow.Render && e.Role == Role.Multimedia) DeviceChanged?.Invoke();
+            if (e.Flow == Flow && e.Role == DeviceRole) DeviceChanged?.Invoke();
         };
     }
 
     public void Start(AudioRingBuffer ring)
     {
-        var device = _devices.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+        var device = _devices.GetDefaultAudioEndpoint(Flow, DeviceRole);
         if (!ReferenceEquals(_device, device)) _device?.Dispose();
         _device = device;
-        Name = $"PC sound ({device.FriendlyName})";
+        Name = $"{(_loopback ? "PC sound" : "Microphone")} ({device.FriendlyName})";
         // Ask for 32-bit float at the device's own rate and channel count (shared
         // mode converts sample formats, never rates), so the format is known
         // before recording starts rather than read off the recorder afterwards.
         WaveFormat mix;
         using (var client = device.CreateAudioClient()) mix = client.MixFormat;
         var requested = WaveFormat.CreateIeeeFloatWaveFormat(mix.SampleRate, mix.Channels);
-        var capture = new WasapiRecorderBuilder().WithDevice(device).WithLoopbackCapture().WithFormat(requested).Build();
+        var builder = new WasapiRecorderBuilder().WithDevice(device).WithFormat(requested);
+        if (_loopback) builder = builder.WithLoopbackCapture();
+        var capture = builder.Build();
         var format = capture.WaveFormat ?? requested;
         _encoding = EncodingOf(format)
             ?? throw new NotSupportedException($"unsupported capture format {format.Encoding} {format.BitsPerSample}-bit");

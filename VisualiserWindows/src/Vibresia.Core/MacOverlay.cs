@@ -15,8 +15,8 @@ public sealed class MacOverlay
     private const double FlashFadeSeconds = 0.18;
     private const double FlashVisibleThreshold = 0.04;
 
-    private readonly Tween _crt = new(CrtFadeSeconds, Curve.EaseInOut);
-    private readonly Tween _flash = new(FlashFadeSeconds, Curve.EaseOut);
+    private readonly Tween _crt = new(CrtFadeSeconds, Easing.InOut);
+    private readonly Tween _flash = new(FlashFadeSeconds, Easing.Out);
     private bool _flashVisible;
 
     /// <summary>AudioEngine.isSounding: a live source with rms over the threshold, with hysteresis.</summary>
@@ -53,38 +53,6 @@ public sealed class MacOverlay
         else _flash.Snap(target);                             // otherwise it follows the strength at once
         _flashVisible = visible;
         _flash.Advance(dt);
-    }
-
-    private enum Curve { EaseInOut, EaseOut }
-
-    /// <summary>A SwiftUI-style animation: from where it is to a new target over a fixed time.</summary>
-    private sealed class Tween(double seconds, Curve curve)
-    {
-        private double _from, _to, _t = 1;
-        public double Value { get; private set; }
-
-        public void Target(double to)
-        {
-            if (to == _to) return;
-            _from = Value;
-            _to = to;
-            _t = 0;
-        }
-
-        public void Snap(double to)
-        {
-            if (_t < 1) { _to = to; return; } // let a running animation finish, towards the latest value
-            _from = _to = Value = to;
-        }
-
-        public void Advance(double dt)
-        {
-            _t = Math.Min(1, _t + dt / seconds);
-            var k = curve == Curve.EaseInOut
-                ? (_t < 0.5 ? 2 * _t * _t : 1 - Math.Pow(-2 * _t + 2, 2) / 2)
-                : 1 - (1 - _t) * (1 - _t);
-            Value = _from + (_to - _from) * k;
-        }
     }
 }
 

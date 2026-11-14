@@ -4,12 +4,16 @@ using Vibresia.Core.Vibescapes;
 
 namespace Vibresia.Core;
 
-/// <summary>Which audio source to start with.</summary>
-public enum AudioChoice { Loopback, Demo }
+/// <summary>
+/// Which audio source was last chosen, in the Mac's picker order (system
+/// audio, microphone, demo tone). The microphone is remembered but, as on the
+/// Mac, never started at launch without being asked for: it can pick up a room.
+/// </summary>
+public enum AudioChoice { Loopback, Microphone, Demo }
 
 /// <summary>
-/// settings.json in the roaming app-data folder: the vibescape to start on
-/// and the audio source (data-model.md). A missing or unreadable file means
+/// settings.json in the roaming app-data folder: the vibescape to start on,
+/// the audio source, and whether to keep the display awake (data-model.md). A missing or unreadable file means
 /// defaults. Keys this version doesn't know are kept when the file is
 /// rewritten, so a later version's settings survive a run of this one.
 /// </summary>
@@ -23,6 +27,9 @@ public sealed class Settings
     public string FilePath { get; }
     public VibescapeId Vibescape { get; set; } = VibescapeCatalog.Default;
     public AudioChoice Audio { get; set; } = AudioChoice.Loopback;
+
+    /// <summary>Ask Windows not to dim or turn off the display while running. Off by default, as the Mac doesn't ask.</summary>
+    public bool KeepDisplayAwake { get; set; }
 
     private Settings(string path, JsonObject root)
     {
@@ -48,8 +55,14 @@ public sealed class Settings
                 throw new JsonException("the top level isn't an object");
             var s = new Settings(path, root);
             if (VibescapeId.Parse(ReadString(root, "vibescape")) is { } id) s.Vibescape = id;
-            s.Audio = ReadString(root, "audio") == "demo" ? AudioChoice.Demo : AudioChoice.Loopback;
-            log.Info("settings", $"loaded: vibescape {s.Vibescape}, audio {s.Audio}");
+            s.Audio = ReadString(root, "audio") switch
+            {
+                "demo" => AudioChoice.Demo,
+                "microphone" => AudioChoice.Microphone,
+                _ => AudioChoice.Loopback,
+            };
+            s.KeepDisplayAwake = root["keepDisplayAwake"] is JsonValue k && k.TryGetValue<bool>(out var awake) && awake;
+            log.Info("settings", $"loaded: vibescape {s.Vibescape}, audio {s.Audio}, keep display awake {s.KeepDisplayAwake}");
             return s;
         }
         catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
@@ -67,7 +80,13 @@ public sealed class Settings
     {
         _root["version"] = Version;
         _root["vibescape"] = Vibescape.ToString();
-        _root["audio"] = Audio == AudioChoice.Demo ? "demo" : "loopback";
+        _root["audio"] = Audio switch
+        {
+            AudioChoice.Demo => "demo",
+            AudioChoice.Microphone => "microphone",
+            _ => "loopback",
+        };
+        _root["keepDisplayAwake"] = KeepDisplayAwake;
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);

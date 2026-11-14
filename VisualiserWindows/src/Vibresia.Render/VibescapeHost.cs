@@ -29,7 +29,6 @@ public sealed class VibescapeHost
     private int _stallsThisPeriod;
     private readonly System.Diagnostics.Stopwatch _work = new();
     private double _lastWorkMs;
-
     private bool _sampledEarly;
 
     /// <summary>Seconds after start at which a second frame sample is logged, once things have settled.</summary>
@@ -51,6 +50,16 @@ public sealed class VibescapeHost
 
     /// <summary>Extra text for the once-a-minute health line (input idle time, from the app).</summary>
     public Func<string?>? HealthExtra { get; set; }
+
+    /// <summary>The display scaling of the window's monitor, kept current as the window moves.</summary>
+    public DisplayScale Scale { get; }
+
+    /// <summary>The palette graded vibescapes are drawn through (the header's palette menu).</summary>
+    public Palette Palette
+    {
+        get => _renderer?.Palette ?? Palette.Neon;
+        set { if (_renderer is not null) _renderer.Palette = value; }
+    }
 
     /// <summary>The size vibescapes are drawn at before being stretched to the screen.</summary>
     public (int Width, int Height) SceneSize => _sceneSize;
@@ -75,6 +84,7 @@ public sealed class VibescapeHost
         _log = log;
         _fillUniforms = fillUniforms;
 
+        Scale = new DisplayScale(window);
         _renderer = new VibescapeRenderer(gl);
         if (Show(start) is { } problem)
         {
@@ -152,7 +162,7 @@ public sealed class VibescapeHost
         }
 
         var size = _window.FramebufferSize;
-        var scale = MonitorArea.ContentScale(_window);
+        var scale = Scale.Value;
         var scene = RenderScale.SceneSize(size.X, size.Y, scale);
         if (scene != _sceneSize)
         {
@@ -164,11 +174,12 @@ public sealed class VibescapeHost
         _uniforms.ResolutionX = scene.Width;
         _uniforms.ResolutionY = scene.Height;
         _macOverlay.Advance(_uniforms, SourceLive, ReduceMotion, delta);
-        _renderer.Draw(_uniforms, delta, size.X, size.Y, _macOverlay.CrtOpacity);
+        _renderer.Draw(_uniforms, delta, size.X, size.Y);
         FramesDrawn++;
 
-        // Read back what was actually drawn, before the swap: tells "we drew
-        // black" apart from "we drew a picture the screen never showed".
+        // Read back what was actually drawn, before the swap and before the
+        // CRT darkens it: tells "we drew black" apart from "we drew a picture
+        // the screen never showed", from the vibescape's own pixels.
         if (FramesDrawn == 1)
             Sample("first frame");
         else if (!_sampledEarly && _clock.Elapsed.TotalSeconds >= SettledSampleSeconds)
@@ -179,6 +190,7 @@ public sealed class VibescapeHost
         else if (stalled)
             Sample("first frame after the stall");
 
+        _renderer.DrawCrt(_macOverlay.CrtOpacity, size.X, size.Y);
         Overlay?.Invoke(delta);
         _renderer?.DrawFlash(_macOverlay.FlashCentreAlpha, _macOverlay.FlashOpacity, size.X, size.Y, scale);
 

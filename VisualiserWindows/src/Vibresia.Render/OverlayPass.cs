@@ -60,25 +60,16 @@ internal sealed class OverlayPass : IDisposable
         }
         """;
 
-    private static readonly float[] Quad = [-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f];
-
     private readonly GL _gl;
     private readonly ShaderProgram _crt, _flash;
-    private readonly uint _vao, _vbo;
+    private readonly FullScreenQuad _quad;
 
-    public unsafe OverlayPass(GL gl)
+    public OverlayPass(GL gl, FullScreenQuad quad)
     {
         _gl = gl;
+        _quad = quad;
         _crt = new ShaderProgram(gl, Vertex, CrtFragment);
         _flash = new ShaderProgram(gl, Vertex, FlashFragment);
-        _vao = gl.GenVertexArray();
-        gl.BindVertexArray(_vao);
-        _vbo = gl.GenBuffer();
-        gl.BindBuffer(BufferTargetARB.ArrayBuffer, _vbo);
-        gl.BufferData<float>(BufferTargetARB.ArrayBuffer, Quad, BufferUsageARB.StaticDraw);
-        gl.EnableVertexAttribArray(0);
-        gl.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 2 * sizeof(float), (void*)0);
-        gl.BindVertexArray(0);
     }
 
     public void DrawCrt(float opacity, int width, int height)
@@ -111,9 +102,7 @@ internal sealed class OverlayPass : IDisposable
 
     private void End()
     {
-        _gl.BindVertexArray(_vao);
-        _gl.DrawArrays(PrimitiveType.TriangleStrip, 0, 4);
-        _gl.BindVertexArray(0);
+        _quad.Draw();
         _gl.Disable(EnableCap.Blend);
     }
 
@@ -121,7 +110,5 @@ internal sealed class OverlayPass : IDisposable
     {
         _crt.Dispose();
         _flash.Dispose();
-        _gl.DeleteBuffer(_vbo);
-        _gl.DeleteVertexArray(_vao);
     }
 }

@@ -59,32 +59,6 @@ public class FrameStatsTests
     }
 }
 
-public class SyntheticPulseTests
-{
-    [Fact]
-    public void ClocksNeverRunBackwards()
-    {
-        var u = new FrameUniforms();
-        float lastTime = -1, lastBeats = -1, lastScroll = -1;
-        for (var t = 0f; t < 600f; t += 1f / 60)
-        {
-            SyntheticPulse.Fill(u, t);
-            Assert.True(u.Time >= lastTime && u.Beats >= lastBeats && u.Scroll >= lastScroll);
-            (lastTime, lastBeats, lastScroll) = (u.Time, u.Beats, u.Scroll);
-        }
-    }
-
-    [Fact]
-    public void IsActiveAndBeatsAt120Bpm()
-    {
-        var u = new FrameUniforms();
-        SyntheticPulse.Fill(u, 10f);
-        Assert.Equal(1f, u.Active);
-        Assert.Equal(20f, u.Beats, 3);
-        Assert.All(u.Bands, b => Assert.InRange(b, 0f, 1f));
-    }
-}
-
 public class GlVersionTests
 {
     [Theory]

@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Vibresia.App/Vibresia.App.csproj" />
+    <Project Path="src/Vibresia.Audio.Windows/Vibresia.Audio.Windows.csproj" />
     <Project Path="src/Vibresia.Core/Vibresia.Core.csproj" />
     <Project Path="src/Vibresia.Render/Vibresia.Render.csproj" />
   </Folder>

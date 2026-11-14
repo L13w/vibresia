@@ -2,12 +2,17 @@
   <PropertyGroup>
     <!-- WinExe: no console window behind the visuals on Windows. Errors reach the user as a message box and the log. -->
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
+    <!-- The Windows build adds loopback capture; plain net10.0 (demo tone only) keeps a Linux build possible. -->
+    <TargetFrameworks>net10.0-windows;net10.0</TargetFrameworks>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <AssemblyName>Vibresia</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\Vibresia.Core\Vibresia.Core.csproj" />
     <ProjectReference Include="..\Vibresia.Render\Vibresia.Render.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="$(TargetFramework.Contains('-windows'))">
+    <ProjectReference Include="..\Vibresia.Audio.Windows\Vibresia.Audio.Windows.csproj" />
   </ItemGroup>
 </Project>

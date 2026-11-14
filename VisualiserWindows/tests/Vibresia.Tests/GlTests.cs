@@ -48,7 +48,7 @@ public sealed class GlTests : IDisposable
     }
 
     [Fact]
-    public void SkeletonVibescapeDrawsAPictureWithTheSyntheticPulse()
+    public void KaleidoscopeDrawsAPictureWhenMusicIsPlaying()
     {
         const int w = 160, h = 90;
         var fbo = _gl.GenFramebuffer();
@@ -62,8 +62,8 @@ public sealed class GlTests : IDisposable
 
         using var renderer = new VibescapeRenderer(_gl);
         renderer.UseBuiltin("kaleidoscope");
-        var u = new FrameUniforms { ResolutionX = w, ResolutionY = h };
-        SyntheticPulse.Fill(u, 3.25f);
+        var u = new FrameUniforms();
+        TestUniforms.Music(u);
         u.ResolutionX = w; u.ResolutionY = h;
         renderer.Draw(u);
 
@@ -113,7 +113,7 @@ public sealed class HostLifecycleTests : IDisposable
     {
         var (window, gl, _) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: false));
         using var log = new Log(_logDir);
-        var host = new VibescapeHost(window, gl, log, "kaleidoscope", SyntheticPulse.Fill);
+        var host = new VibescapeHost(window, gl, log, "kaleidoscope", (u, _) => TestUniforms.Music(u));
         window.Render += _ => { if (host.FramesDrawn >= 10) window.Close(); };
 
         window.Run();

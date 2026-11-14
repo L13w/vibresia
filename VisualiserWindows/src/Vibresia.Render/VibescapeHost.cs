@@ -17,7 +17,8 @@ public sealed class VibescapeHost
     private readonly IWindow _window;
     private readonly GL _gl;
     private readonly Log _log;
-    private readonly Action<FrameUniforms, float> _fillUniforms;
+    private readonly Action<FrameUniforms, double> _fillUniforms;
+    private readonly List<IDisposable> _releaseOnClose = [];
     private readonly FrameUniforms _uniforms = new();
     private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
     private readonly FrameStats _stats = new();
@@ -32,7 +33,11 @@ public sealed class VibescapeHost
     /// <summary>The most recent sample of drawn pixels, for the log and for tests.</summary>
     public FrameSample? LastSample { get; private set; }
 
-    public VibescapeHost(IWindow window, GL gl, Log log, string vibescape, Action<FrameUniforms, float> fillUniforms)
+    /// <summary>Drawn over the vibescape each frame (after the pixel sample, so it never skews it).</summary>
+    public event Action<double>? Overlay;
+
+    /// <param name="fillUniforms">Fills the frame's uniforms; given the seconds since the last frame.</param>
+    public VibescapeHost(IWindow window, GL gl, Log log, string vibescape, Action<FrameUniforms, double> fillUniforms)
     {
         _window = window;
         _gl = gl;
@@ -62,7 +67,7 @@ public sealed class VibescapeHost
         if (_window.WindowState == WindowState.Minimized) return;
 
         var size = _window.FramebufferSize;
-        _fillUniforms(_uniforms, (float)_clock.Elapsed.TotalSeconds);
+        _fillUniforms(_uniforms, delta);
         _uniforms.ResolutionX = size.X;
         _uniforms.ResolutionY = size.Y;
         _gl.ClearColor(0f, 0f, 0f, 1f);
@@ -80,6 +85,8 @@ public sealed class VibescapeHost
             Sample($"after {SettledSampleSeconds:F0} s");
         }
 
+        Overlay?.Invoke(delta);
+
         if (_stats.Add(delta) is { } summary)
             _log.Info("health", $"{summary}; working set {Environment.WorkingSet / (1024 * 1024)} MB");
     }
@@ -92,10 +99,15 @@ public sealed class VibescapeHost
                            $"position {_window.Position}, size {_window.Size}, framebuffer {_window.FramebufferSize}; GL error {error}");
     }
 
+    /// <summary>GL-owning objects (the overlay) to release while the context is still alive.</summary>
+    public void ReleaseOnClose(IDisposable resource) => _releaseOnClose.Add(resource);
+
     private void OnClosing()
     {
         _renderer?.Dispose();
         _renderer = null;
+        foreach (var r in _releaseOnClose) r.Dispose();
+        _releaseOnClose.Clear();
         _log.Info("window", $"closing after {FramesDrawn} frames");
     }
 }

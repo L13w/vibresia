@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Silk.NET.Input;
 using Silk.NET.Windowing;
 using Vibresia.Core;
+using Vibresia.Core.Audio;
 using Vibresia.Render;
 
 namespace Vibresia.App;
@@ -65,7 +66,11 @@ public static partial class Program
         log.Info("startup", $"window up after {started.ElapsedMilliseconds} ms; {(windowed ? "windowed" : "borderless full screen")}; " +
                             $"monitor {window.Monitor?.Name}: full {MonitorArea.Primary()?.Size}, work area {window.Monitor?.Bounds.Size}; framebuffer {window.FramebufferSize}");
 
-        var host = new VibescapeHost(window, gl, log, StartVibescape, SyntheticPulse.Fill);
+        using var audio = new AudioPipeline(log);
+        var sources = new AudioSources();
+        audio.Use(sources.Preferred);
+
+        var host = new VibescapeHost(window, gl, log, StartVibescape, (u, dt) => audio.Tick(u, dt));
         var firstFrameLogged = false;
         window.Render += _ =>
         {
@@ -75,14 +80,45 @@ public static partial class Program
         };
 
         var input = window.CreateInput();
+        var overlay = new StatusOverlay(gl, window, input);
+        host.ReleaseOnClose(overlay);
+        var announceUntil = 4.0; // seconds of "listening to …" after a source starts
+        var elapsed = 0.0;
+        host.Overlay += dt =>
+        {
+            elapsed += dt;
+            var (text, tone) = StatusText(audio, sources, elapsed < announceUntil);
+            overlay.Show(text, tone);
+            overlay.Render((float)dt);
+        };
+
         foreach (var kb in input.Keyboards)
             kb.KeyDown += (_, key, _) =>
             {
                 if (key == Key.Escape) window.Close();
                 else if (key == Key.F12) OpenFolder(log);
+                else if (key == Key.D)
+                {
+                    audio.Use(sources.Toggle(audio.SourceName));
+                    announceUntil = elapsed + 4.0;
+                }
             };
 
         window.Run();
+    }
+
+    private static (string? Text, StatusTone Tone) StatusText(AudioPipeline audio, AudioSources sources, bool announce)
+    {
+        var other = sources.HasLoopback ? " Press D to switch to the demo tone." : "";
+        return audio.Status switch
+        {
+            AudioStatus.Failed => ($"Can't hear this PC's sound: {audio.FailureMessage}{other}", StatusTone.Error),
+            AudioStatus.NothingPlaying when audio.SourceName == sources.Demo.Name =>
+                ("The demo tone has gone quiet; press D to restart it.", StatusTone.Error),
+            AudioStatus.NothingPlaying => ($"Nothing playing. Play some music, or press D for the demo tone.", StatusTone.Hint),
+            _ when announce => ($"Listening to {audio.SourceName}" + (sources.HasLoopback ? " (D switches)" : ""), StatusTone.Info),
+            _ => (null, StatusTone.Info),
+        };
     }
 
     private static void OpenFolder(Log log)

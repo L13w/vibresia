@@ -29,7 +29,14 @@ public static class GlWindow
     }
 
     /// <summary>Initialises the window and its GL context. Throws <see cref="GlUnavailableException"/> when the driver refuses.</summary>
-    public static (IWindow Window, GL Gl, GlInfo Info) Create(WindowOptions options)
+    /// <param name="composed">
+    /// Full screen only: make the window one pixel taller than the monitor.
+    /// Windows treats a window that exactly covers a monitor as a full-screen
+    /// app and may switch how it is presented when the pointer moves to
+    /// another display, which blanked the owner's 4K monitor for 10–20 s; a
+    /// window that overhangs by a pixel stays an ordinary composed window.
+    /// </param>
+    public static (IWindow Window, GL Gl, GlInfo Info) Create(WindowOptions options, bool composed = false)
     {
         var (major, minor) = (options.API.Version.MajorVersion, options.API.Version.MinorVersion);
         if (GlProbe.CannotCreate(major, minor) is { } reason)
@@ -42,7 +49,7 @@ public static class GlWindow
         if (options.WindowBorder == WindowBorder.Hidden && MonitorArea.Primary() is { } screen)
         {
             window.Position = screen.Origin;
-            window.Size = screen.Size;
+            window.Size = composed ? screen.Size + new Vector2D<int>(0, 1) : screen.Size;
         }
 
         var gl = GL.GetApi(window);

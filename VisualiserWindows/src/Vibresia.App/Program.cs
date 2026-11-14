@@ -40,7 +40,7 @@ public static partial class Program
                                 $"{RuntimeInformation.OSDescription} {RuntimeInformation.OSArchitecture}");
             try
             {
-                Run(log, windowed: args.Contains("--windowed"));
+                Run(log, windowed: args.Contains("--windowed"), composed: args.Contains("--composed"));
                 log.Info("startup", "exited normally");
                 return 0;
             }
@@ -59,13 +59,13 @@ public static partial class Program
         }
     }
 
-    private static void Run(Log log, bool windowed)
+    private static void Run(Log log, bool windowed, bool composed)
     {
         var started = Stopwatch.StartNew();
-        var (window, gl, info) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: !windowed));
+        var (window, gl, info) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: !windowed), composed);
         using var _ = window;
         log.Info("gpu", info.ToString());
-        log.Info("startup", $"window up after {started.ElapsedMilliseconds} ms; {(windowed ? "windowed" : "borderless full screen")}; " +
+        log.Info("startup", $"window up after {started.ElapsedMilliseconds} ms; {(windowed ? "windowed" : composed ? "borderless full screen, 1 px taller than the monitor (--composed)" : "borderless full screen")}; " +
                             $"monitor {window.Monitor?.Name}: full {MonitorArea.Primary()?.Size}, work area {window.Monitor?.Bounds.Size}; framebuffer {window.FramebufferSize}");
 
         var settings = Settings.Load(Settings.DefaultPath(), log);

@@ -147,6 +147,22 @@ public sealed class HostLifecycleTests : IDisposable
     }
 
     [Fact]
+    public void ComposedFullScreenOverhangsTheMonitorByOnePixel()
+    {
+        var (window, _, _) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: true), composed: true);
+        try
+        {
+            var bounds = MonitorArea.Primary()!.Value;
+            Assert.Equal(bounds.Origin, window.Position);
+            Assert.Equal(bounds.Size + new Silk.NET.Maths.Vector2D<int>(0, 1), window.Size);
+        }
+        finally
+        {
+            window.Dispose();
+        }
+    }
+
+    [Fact]
     public void FullScreenIsABorderlessWindowCoveringTheMonitor()
     {
         var (window, _, _) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: true));

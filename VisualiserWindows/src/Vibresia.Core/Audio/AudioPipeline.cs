@@ -38,6 +38,7 @@ public sealed class AudioPipeline : IDisposable
     private double _silentFor;
     private double _noDataFor;
     private float[] _gapFill = new float[4096];
+    private readonly AudioHealth _health = new();
 
     /// <summary>
     /// How long a source may deliver nothing before the gap is filled with
@@ -113,6 +114,8 @@ public sealed class AudioPipeline : IDisposable
             _analyzer.Beat, _analyzer.BeatStrength, _analyzer.Bpm, idle);
         _clocks.Advance(snap, dt);
         _clocks.Fill(u, _analyzer, snap);
+        if (_health.Add(_analyzer.Rms, _analyzer.Gate, u.Active, _analyzer.Bpm, dt) is { } summary)
+            _log.Info("audio", $"{_source?.Name ?? "no source"}, {Status}: {summary}");
     }
 
     /// <returns>Whether the source delivered anything since the last frame.</returns>
@@ -167,10 +170,6 @@ public sealed class AudioPipeline : IDisposable
         Status = AudioStatus.None;
     }
 
-    public void Dispose()
-    {
-        var s = _source;
-        StopCurrent();
-        s?.Dispose();
-    }
+    /// <summary>Stops the current source. Sources belong to whoever made them (the app's AudioSources), which disposes them.</summary>
+    public void Dispose() => StopCurrent();
 }

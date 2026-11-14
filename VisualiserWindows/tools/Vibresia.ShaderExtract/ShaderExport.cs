@@ -25,6 +25,8 @@ public static class ShaderExport
             ["prelude.glsl"] = Require(funLiterals, "prelude"),
             ["custom-wrapper.glsl"] = Require(funLiterals, "customWrapper"),
             ["fullscreen.vert"] = Require(coreLiterals, "liquidVS"),
+            ["grade.vert"] = Require(coreLiterals, "gradeVS"),
+            ["grade.frag"] = Require(coreLiterals, "gradeFS"),
         };
         foreach (var (mode, literal) in modes)
             files[$"builtin/{mode}.glsl"] = Require(funLiterals, literal);

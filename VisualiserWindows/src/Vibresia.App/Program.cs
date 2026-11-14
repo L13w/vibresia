@@ -4,15 +4,17 @@ using Silk.NET.Input;
 using Silk.NET.Windowing;
 using Vibresia.Core;
 using Vibresia.Core.Audio;
+using Vibresia.Core.Vibescapes;
 using Vibresia.Render;
 
 namespace Vibresia.App;
 
 public static partial class Program
 {
-    // The skeleton shows one upstream vibescape. Kaleidoscope uses only the
-    // shared prelude uniforms, so it needs nothing the port doesn't have yet.
-    private const string StartVibescape = "kaleidoscope";
+    /// <summary>How long a custom vibescape's compile error stays on screen.</summary>
+    private const double ErrorSeconds = 10;
+    /// <summary>How long a vibescape's name shows after switching to it.</summary>
+    private const double TitleSeconds = 2.5;
 
     public static int Main(string[] args)
     {
@@ -50,8 +52,8 @@ public static partial class Program
             }
             catch (ShaderCompileException e)
             {
-                log.Error("shader", $"{StartVibescape}: {e.Stage}: {e.DriverLog}");
-                ShowError($"The '{StartVibescape}' vibescape failed to compile on this graphics driver.\n\nThe log is in {log.Directory} — please send it.");
+                log.Error("shader", $"no vibescape could be shown: {e.Stage}: {e.DriverLog}");
+                ShowError($"Vibresia's vibescapes failed to compile on this graphics driver.\n\nThe log is in {log.Directory} — please send it.");
                 return 3;
             }
         }
@@ -66,11 +68,18 @@ public static partial class Program
         log.Info("startup", $"window up after {started.ElapsedMilliseconds} ms; {(windowed ? "windowed" : "borderless full screen")}; " +
                             $"monitor {window.Monitor?.Name}: full {MonitorArea.Primary()?.Size}, work area {window.Monitor?.Bounds.Size}; framebuffer {window.FramebufferSize}");
 
+        var settings = Settings.Load(Settings.DefaultPath(), log);
+        var customFolder = CustomVibescapeLoader.DefaultFolder();
+        var catalog = new VibescapeCatalog(CustomVibescapeLoader.LoadAll(customFolder, log));
+
         using var sources = new AudioSources();
         using var audio = new AudioPipeline(log);
-        audio.Use(sources.Preferred);
+        audio.Use(settings.Audio == AudioChoice.Demo || !sources.HasLoopback ? sources.Demo : sources.Preferred);
 
-        var host = new VibescapeHost(window, gl, log, StartVibescape, (u, dt) => audio.Tick(u, dt));
+        var fallback = catalog.Find(VibescapeCatalog.Default)!;
+        var start = catalog.Find(settings.Vibescape);
+        if (start is null) log.Warn("vibescape", $"saved vibescape {settings.Vibescape} isn't available; starting on {fallback.Id}");
+        var host = new VibescapeHost(window, gl, log, start ?? fallback, fallback, (u, dt) => audio.Tick(u, dt));
         var firstFrameLogged = false;
         window.Render += _ =>
         {
@@ -82,6 +91,44 @@ public static partial class Program
         var input = window.CreateInput();
         var overlay = new StatusOverlay(gl, window, input);
         host.ReleaseOnClose(overlay);
+        if (host.StartupProblem is { } failed)
+            overlay.Notice($"{failed.Entry.Title} didn't load, so this is {host.Current.Title}.\n{failed.Problem.ForScreen()}", StatusTone.Error, ErrorSeconds);
+        else
+            overlay.Notice(host.Current.Title, StatusTone.Info, TitleSeconds);
+
+        void Remember()
+        {
+            settings.Vibescape = host.Current.Id;
+            settings.Audio = ReferenceEquals(audio.Source, sources.Demo) ? AudioChoice.Demo : AudioChoice.Loopback;
+            settings.Save(log);
+        }
+
+        void Switch(VibescapeEntry entry)
+        {
+            if (host.Show(entry) is { } problem)
+                overlay.Notice($"{entry.Title} didn't load.\n{problem.ForScreen()}", StatusTone.Error, ErrorSeconds);
+            else
+            {
+                overlay.Notice(entry.Title, StatusTone.Info, TitleSeconds);
+                Remember();
+            }
+        }
+
+        var picker = new PickerState();
+        void OpenPicker()
+        {
+            // Rescan, so a file copied into the folder shows up without a restart.
+            catalog = new VibescapeCatalog(CustomVibescapeLoader.LoadAll(customFolder, log));
+            picker.Open(catalog.Entries.Count, catalog.IndexOf(host.Current.Id));
+        }
+        void Choose(int index)
+        {
+            picker.Close();
+            if (index >= 0 && index < catalog.Entries.Count) Switch(catalog.Entries[index]);
+        }
+        var pickerView = () => new PickerView(catalog.Entries, picker, catalog.IndexOf(host.Current.Id), Choose,
+            () => OpenFolder(customFolder, log));
+
         var announceUntil = 4.0; // seconds of "listening to …" after a source starts
         var elapsed = 0.0;
         host.Overlay += dt =>
@@ -96,34 +143,55 @@ public static partial class Program
                 MessageSeverity.Hint => StatusTone.Hint,
                 _ => StatusTone.Info,
             });
-            overlay.Render((float)dt);
+            overlay.Render((float)dt, picker.IsOpen ? pickerView() : null);
         };
 
         foreach (var kb in input.Keyboards)
             kb.KeyDown += (_, key, _) =>
             {
-                if (key == Key.Escape) window.Close();
-                else if (key == Key.F12) OpenFolder(log);
-                else if (key == Key.D)
+                if (picker.IsOpen)
                 {
-                    audio.Use(SourceToggle.Next(audio.Source, sources.Demo, sources.Loopback));
-                    announceUntil = elapsed + 4.0;
+                    switch (key)
+                    {
+                        case Key.Escape or Key.Tab: picker.Close(); break;
+                        case Key.Up: picker.Move(-1); break;
+                        case Key.Down: picker.Move(1); break;
+                        case Key.Enter or Key.KeypadEnter: Choose(picker.Selected); break;
+                    }
+                    return;
+                }
+                switch (key)
+                {
+                    case Key.Escape: window.Close(); break;
+                    case Key.F12: OpenFolder(log.Directory, log); break;
+                    case Key.Tab: OpenPicker(); break;
+                    case Key.Right: Switch(catalog.Step(host.Current.Id, 1)); break;
+                    case Key.Left: Switch(catalog.Step(host.Current.Id, -1)); break;
+                    case >= Key.Number0 and <= Key.Number9 when catalog.ForShortcut((char)('0' + (key - Key.Number0))) is { } picked:
+                        Switch(picked);
+                        break;
+                    case Key.D:
+                        audio.Use(SourceToggle.Next(audio.Source, sources.Demo, sources.Loopback));
+                        announceUntil = elapsed + 4.0;
+                        Remember();
+                        break;
                 }
             };
 
         window.Run();
     }
 
-    private static void OpenFolder(Log log)
+    private static void OpenFolder(string folder, Log log)
     {
         if (!OperatingSystem.IsWindows()) return;
         try
         {
-            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{log.Directory}\"") { UseShellExecute = true });
+            Directory.CreateDirectory(folder);
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{folder}\"") { UseShellExecute = true });
         }
-        catch (System.ComponentModel.Win32Exception e)
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or IOException or UnauthorizedAccessException)
         {
-            log.Warn("ui", $"couldn't open the log folder: {e.Message}");
+            log.Warn("ui", $"couldn't open {folder}: {e.Message}");
         }
     }
 

@@ -194,8 +194,9 @@ public class AudioPipelineTests : IDisposable
         public event Action<string>? Failed;
         public event Action? DeviceChanged;
         public void Start(AudioRingBuffer ring) { Ring = ring; ring.Reset(48000); Starts++; }
-        public void Stop() { }
-        public void Dispose() { }
+        public int Stops, Disposals;
+        public void Stop() => Stops++;
+        public void Dispose() => Disposals++;
         public void Feed(Func<double, float> signal, int frames, Action tick)
         {
             var buf = new float[800];
@@ -299,6 +300,33 @@ public class AudioPipelineTests : IDisposable
         using (var log = new Log(_dir))
         using (var pipe = new AudioPipeline(log)) pipe.Use(new FakeSource());
         Assert.Contains("started fake at 48000 Hz; fake format", File.ReadAllText(Path.Combine(_dir, Log.FileName)));
+    }
+
+    /// <summary>The app's AudioSources owns and disposes sources; a pipeline disposing them too disposed loopback twice on exit.</summary>
+    [Fact]
+    public void DisposingThePipelineStopsTheSourceButLeavesItToItsOwner()
+    {
+        using var log = new Log(_dir);
+        var src = new FakeSource();
+        using (var pipe = new AudioPipeline(log)) pipe.Use(src);
+        Assert.Equal(1, src.Stops);
+        Assert.Equal(0, src.Disposals);
+    }
+
+    /// <summary>Once a minute the log says how loud it was and how often the gate held the picture down.</summary>
+    [Fact]
+    public void LogsAnAudioHealthLineEachMinute()
+    {
+        using (var log = new Log(_dir))
+        using (var pipe = new AudioPipeline(log))
+        {
+            var src = new FakeSource();
+            pipe.Use(src);
+            var u = new FrameUniforms();
+            src.Feed(t => AnalyserRig.Sine(t, 200), 61 * 60, () => pipe.Tick(u, 1 / 60.0));
+        }
+        var text = File.ReadAllText(Path.Combine(_dir, Log.FileName));
+        Assert.Matches(@"\[audio\] fake, Playing: 60 s: rms avg 0\.\d+ max 0\.\d+; gate closed \d+% partly \d+%; activity avg", text);
     }
 
     [Fact]

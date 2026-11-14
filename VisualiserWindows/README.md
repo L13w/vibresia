@@ -10,11 +10,20 @@ Download the zip from the fork's releases, unzip it, and run `Vibresia.exe`. Win
 
 | Key | Does |
 |---|---|
+| ← / → | Previous / next vibescape |
+| 1 … 9, 0 | Pick one of the first ten vibescapes in the list, as on the Mac |
+| Tab | Open the vibescape list (↑/↓ and Enter, or click; Tab or Esc closes it) |
 | D | Switch between this PC's sound and the built-in demo tone |
 | Esc | Quit |
 | F12 | Open the log folder (send `vibresia.log` when reporting a problem) |
 
-Start it with `--windowed` to get a window instead of full screen.
+Start it with `--windowed` to get a window instead of full screen. The last vibescape and audio source are remembered in `%APPDATA%\Vibresia\settings.json`.
+
+## Your own vibescapes
+
+Put vibescape `.json` files (the macOS app's format, so a file copied from a Mac works) in `%APPDATA%\Vibresia\Vibescapes\`. The vibescape list has an **Open custom folder** button that opens it. Opening the list rescans the folder, so there is no need to restart. One that doesn't compile shows why (with the line in your code), and the previous vibescape keeps playing.
+
+Not yet the same as the Mac: no Auto Scan, The Band or Machine; no palette picker (everything uses the Mac's default NEON grade); no editor or sharing; the list is a simple one rather than the Mac's menu and panel.
 
 ## Building (works on Linux or Windows)
 
@@ -50,7 +59,7 @@ A test fails whenever `shaders/` and the macOS sources disagree.
 
 ## Layout
 
-- `src/Vibresia.Core`: audio analysis, tempo, motion clocks, demo tone, uniforms, logging. No GL and no Windows APIs.
+- `src/Vibresia.Core`: audio analysis, tempo, motion clocks, demo tone, uniforms, the vibescape catalog and custom loader, settings, logging. No GL and no Windows APIs.
 - `src/Vibresia.Audio.Windows`: loopback capture of the PC's playback (NAudio).
 - `src/Vibresia.Render`: OpenGL window, renderer and status overlay (Silk.NET, ImGui).
 - `src/Vibresia.App`: the executable.

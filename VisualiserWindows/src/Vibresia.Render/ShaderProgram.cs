@@ -72,5 +72,14 @@ public sealed class ShaderProgram : IDisposable
         if (l >= 0) _gl.Uniform1(l, (uint)values.Length, values);
     }
 
+    public void Set3(string name, (float X, float Y, float Z) v) { var l = Location(name); if (l >= 0) _gl.Uniform3(l, v.X, v.Y, v.Z); }
+
+    /// <summary>A <c>vec3[]</c> uniform, from three floats per element.</summary>
+    public void SetVec3Array(string name, ReadOnlySpan<float> xyz)
+    {
+        var l = Location(name);
+        if (l >= 0) _gl.Uniform3(l, (uint)(xyz.Length / 3), xyz);
+    }
+
     public void Dispose() => _gl.DeleteProgram(Handle);
 }

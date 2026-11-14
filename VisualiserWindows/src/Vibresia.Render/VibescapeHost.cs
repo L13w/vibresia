@@ -2,6 +2,7 @@ using Silk.NET.Maths;
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 using Vibresia.Core;
+using Vibresia.Core.Vibescapes;
 
 namespace Vibresia.Render;
 
@@ -36,8 +37,17 @@ public sealed class VibescapeHost
     /// <summary>Drawn over the vibescape each frame (after the pixel sample, so it never skews it).</summary>
     public event Action<double>? Overlay;
 
+    /// <summary>Why the start vibescape didn't load, when the host fell back; null when it loaded.</summary>
+    public (VibescapeEntry Entry, ShaderProblem Problem)? StartupProblem { get; }
+
+    /// <summary>The vibescape drawing now.</summary>
+    public VibescapeEntry Current => _renderer?.Current ?? throw new ObjectDisposedException(nameof(VibescapeHost));
+
+    /// <param name="start">The vibescape to start on.</param>
+    /// <param name="fallback">Shown instead when <paramref name="start"/> fails; if this fails too the error propagates (a built-in that doesn't compile is a port bug).</param>
     /// <param name="fillUniforms">Fills the frame's uniforms; given the seconds since the last frame.</param>
-    public VibescapeHost(IWindow window, GL gl, Log log, string vibescape, Action<FrameUniforms, double> fillUniforms)
+    public VibescapeHost(IWindow window, GL gl, Log log, VibescapeEntry start, VibescapeEntry fallback,
+        Action<FrameUniforms, double> fillUniforms)
     {
         _window = window;
         _gl = gl;
@@ -45,13 +55,52 @@ public sealed class VibescapeHost
         _fillUniforms = fillUniforms;
 
         _renderer = new VibescapeRenderer(gl);
-        _renderer.UseBuiltin(vibescape);
-        log.Info("vibescape", $"showing {vibescape}");
+        if (Show(start) is { } problem)
+        {
+            StartupProblem = (start, problem);
+            if (start.Id != fallback.Id)
+            {
+                log.Warn("vibescape", $"falling back to {fallback.Id}");
+                problem = Show(fallback);
+            }
+            if (problem is not null)
+            {
+                _renderer.Dispose();
+                throw new ShaderCompileException("fragment compile", problem.DriverLog.Length > 0 ? problem.DriverLog : problem.Message);
+            }
+        }
 
         gl.Viewport(window.FramebufferSize);
         window.FramebufferResize += OnResize;
         window.Render += OnRender;
         window.Closing += OnClosing;
+    }
+
+    /// <summary>
+    /// Switches to <paramref name="entry"/>. If it fails to compile, the
+    /// previous vibescape keeps drawing; the problem is logged with the
+    /// vibescape's id and returned for the screen.
+    /// </summary>
+    public ShaderProblem? Show(VibescapeEntry entry)
+    {
+        if (_renderer is null) throw new ObjectDisposedException(nameof(VibescapeHost));
+        ShaderProblem? problem;
+        try
+        {
+            problem = _renderer.Use(entry);
+        }
+        catch (ShaderCompileException e)
+        {
+            // A built-in that doesn't compile on this driver: a port problem, but not worth losing the app over.
+            problem = new ShaderProblem($"The built-in {entry.Title} didn't compile on this graphics driver. Please send the log.", null, e.DriverLog);
+        }
+        if (problem is null)
+            _log.Info("vibescape", $"showing {entry.Id} ({entry.Title})");
+        else
+            _log.Warn("vibescape", $"{entry.Id} didn't compile; still showing {_renderer.Current?.Id.ToString() ?? "nothing"}: " +
+                                   $"{problem.Title}: {problem.Message}" +
+                                   (problem.DriverLog.Length > 0 ? $" | driver: {problem.DriverLog.ReplaceLineEndings(" / ").Trim()}" : ""));
+        return problem;
     }
 
     private void OnResize(Vector2D<int> size)
@@ -70,9 +119,7 @@ public sealed class VibescapeHost
         _fillUniforms(_uniforms, delta);
         _uniforms.ResolutionX = size.X;
         _uniforms.ResolutionY = size.Y;
-        _gl.ClearColor(0f, 0f, 0f, 1f);
-        _gl.Clear(ClearBufferMask.ColorBufferBit);
-        _renderer.Draw(_uniforms);
+        _renderer.Draw(_uniforms, delta);
         FramesDrawn++;
 
         // Read back what was actually drawn, before the swap: tells "we drew

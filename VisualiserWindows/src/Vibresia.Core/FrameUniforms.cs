@@ -23,4 +23,7 @@ public sealed class FrameUniforms
     public float MouseX, MouseY, MouseHere, MouseDown;
     public float ResolutionX, ResolutionY;
     public readonly float[] Bands = new float[BandCount];
+
+    /// <summary>Detected tempo, 0 when none. Not a prelude uniform: Hamster Dance's sprite clock follows it.</summary>
+    public double Bpm;
 }

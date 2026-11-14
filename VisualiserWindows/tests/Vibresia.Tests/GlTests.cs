@@ -1,6 +1,7 @@
 using Silk.NET.OpenGL;
 using Silk.NET.Windowing;
 using Vibresia.Core;
+using Vibresia.Core.Vibescapes;
 using Vibresia.Render;
 
 namespace Vibresia.Tests;
@@ -61,11 +62,11 @@ public sealed class GlTests : IDisposable
         _gl.Viewport(0, 0, w, h);
 
         using var renderer = new VibescapeRenderer(_gl);
-        renderer.UseBuiltin("kaleidoscope");
+        Assert.Null(renderer.Use(Catalog.Find(VibescapeCatalog.Default)!));
         var u = new FrameUniforms();
         TestUniforms.Music(u);
         u.ResolutionX = w; u.ResolutionY = h;
-        renderer.Draw(u);
+        renderer.Draw(u, 1 / 60.0);
 
         var pixels = new byte[w * h * 4];
         _gl.ReadPixels<byte>(0, 0, w, h, PixelFormat.Rgba, PixelType.UnsignedByte, pixels);
@@ -76,6 +77,8 @@ public sealed class GlTests : IDisposable
         Assert.True(distinct > 50, $"expected a picture, got {distinct} distinct colours");
         Assert.Equal(GLEnum.NoError, _gl.GetError());
     }
+
+    private static readonly VibescapeCatalog Catalog = new([]);
 
     public void Dispose() => _window.Dispose();
 }
@@ -107,13 +110,14 @@ public class GlCollection;
 public sealed class HostLifecycleTests : IDisposable
 {
     private readonly string _logDir = Path.Combine(Path.GetTempPath(), "vibresia-host-" + Guid.NewGuid().ToString("N"));
+    private static readonly VibescapeEntry Kaleidoscope = new VibescapeCatalog([]).Find(VibescapeCatalog.Default)!;
 
     [Fact]
     public void RunsFramesThenClosesWithoutTouchingADeadContext()
     {
         var (window, gl, _) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: false));
         using var log = new Log(_logDir);
-        var host = new VibescapeHost(window, gl, log, "kaleidoscope", (u, _) => TestUniforms.Music(u));
+        var host = new VibescapeHost(window, gl, log, Kaleidoscope, Kaleidoscope, (u, _) => TestUniforms.Music(u));
         window.Render += _ => { if (host.FramesDrawn >= 10) window.Close(); };
 
         window.Run();

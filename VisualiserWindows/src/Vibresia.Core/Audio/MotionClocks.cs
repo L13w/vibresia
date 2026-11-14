@@ -109,5 +109,6 @@ public sealed class MotionClocks
         u.BassSmooth = (float)BassSmooth;
         u.Presence = (float)Presence;
         analyzer.Bands.CopyTo(u.Bands);
+        u.Bpm = snap.Bpm;
     }
 }

@@ -47,6 +47,9 @@ public sealed class AudioAnalyzer
     public bool Beat { get; private set; }
     public float BeatStrength { get; private set; }
     public double Bpm { get; private set; }
+
+    /// <summary>The noise gate this frame: 0 below the noise floor (treated as silence), 1 once there's clearly sound.</summary>
+    public float Gate { get; private set; }
     public ReadOnlySpan<float> Bands => _bandsSmooth;
 
     public AudioAnalyzer(AudioRingBuffer ring)
@@ -90,6 +93,7 @@ public sealed class AudioAnalyzer
         Rms = rms;
         // 0 below the noise floor, 1 once there's clearly sound; fades between.
         var gate = Math.Clamp((rms - GateLow) / (GateHigh - GateLow), 0f, 1f);
+        Gate = gate;
 
         for (var i = 0; i < FftSize; i++) _windowed[i] = _time[i] * _window[i];
         _fft.Magnitudes(_windowed, _mags);

@@ -19,6 +19,8 @@ public static class ShaderSources
     public static string Prelude { get; } = Read("prelude.glsl");
     public static string VertexShader { get; } = Read("fullscreen.vert");
     public static string CustomWrapper { get; } = Read("custom-wrapper.glsl");
+    public static string GradeVertex { get; } = Read("grade.vert");
+    public static string GradeFragment { get; } = Read("grade.frag");
 
     /// <summary>Built-in vibescape names in upstream's catalog order.</summary>
     public static IReadOnlyList<string> BuiltinOrder { get; } =
@@ -28,6 +30,16 @@ public static class ShaderSources
 
     /// <summary>The complete fragment shader for a built-in.</summary>
     public static string BuiltinFragment(string name) => Prelude + BuiltinBody(name);
+
+    /// <summary>
+    /// The complete fragment shader for a custom vibescape body: prelude, the
+    /// user's code, then the wrapper whose main() calls their render(). The
+    /// wrapper goes last because GLSL has no forward declarations.
+    /// </summary>
+    public static string CustomFragment(string body) => Prelude + body + "\n" + CustomWrapper;
+
+    /// <summary>Lines of <see cref="CustomFragment"/> before the user's first line, for mapping driver line numbers back to theirs.</summary>
+    public static int CustomPreludeLines { get; } = Prelude.Count(c => c == '\n');
 
     private static string Read(string relative)
     {

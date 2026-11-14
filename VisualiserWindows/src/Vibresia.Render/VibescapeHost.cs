@@ -27,6 +27,9 @@ public sealed class VibescapeHost
     private VibescapeRenderer? _renderer;
     private (int W, int H) _sceneSize;
     private int _stallsThisPeriod;
+    private readonly System.Diagnostics.Stopwatch _work = new();
+    private double _lastWorkMs;
+    private readonly List<(double Due, string Label)> _pendingSamples = [];
     private bool _sampledEarly;
 
     /// <summary>Seconds after start at which a second frame sample is logged, once things have settled.</summary>
@@ -45,6 +48,9 @@ public sealed class VibescapeHost
 
     /// <summary>The user asked for less motion (Windows "Animation effects" off): no beat flash, as the Mac honours Reduce Motion.</summary>
     public bool ReduceMotion { get; set; }
+
+    /// <summary>Extra text for a stall's log line (where the pointer is, from the app).</summary>
+    public Func<string?>? StallContext { get; set; }
 
     /// <summary>Extra text for the once-a-minute health line (input idle time, from the app).</summary>
     public Func<string?>? HealthExtra { get; set; }
@@ -135,11 +141,17 @@ public sealed class VibescapeHost
         // Minimised: nothing to see, so spend nothing drawing it.
         if (_window.WindowState == WindowState.Minimized) return;
 
+        _work.Restart();
+        var stalled = false;
         if (delta > StallSeconds && FramesDrawn > 0)
         {
             _stallsThisPeriod++;
-            if (_stallsThisPeriod <= 10)
-                _log.Warn("frame", $"stall: {delta * 1000:F0} ms since the last frame; window state {_window.WindowState}");
+            stalled = _stallsThisPeriod <= 10;
+            // This app's own work on the frame before tells "we were slow" from
+            // "Windows or the driver held the frame" (the swap and event handling sit outside it).
+            if (stalled)
+                _log.Warn("frame", $"stall: {delta * 1000:F0} ms since the last frame; this app's work on the frame before took {_lastWorkMs:F0} ms; " +
+                                   $"window state {_window.WindowState}" + (StallContext?.Invoke() is { } where ? "; " + where : ""));
         }
 
         var size = _window.FramebufferSize;
@@ -167,6 +179,14 @@ public sealed class VibescapeHost
             _sampledEarly = true;
             Sample($"after {SettledSampleSeconds:F0} s");
         }
+        else if (stalled)
+            Sample("first frame after the stall");
+        for (var i = _pendingSamples.Count - 1; i >= 0; i--)
+            if (_clock.Elapsed.TotalSeconds >= _pendingSamples[i].Due)
+            {
+                Sample(_pendingSamples[i].Label);
+                _pendingSamples.RemoveAt(i);
+            }
 
         Overlay?.Invoke(delta);
         _renderer?.DrawFlash(_macOverlay.FlashCentreAlpha, _macOverlay.FlashOpacity, size.X, size.Y, scale);
@@ -178,7 +198,12 @@ public sealed class VibescapeHost
                                 (HealthExtra?.Invoke() is { } extra ? "; " + extra : ""));
             _stallsThisPeriod = 0;
         }
+        _lastWorkMs = _work.Elapsed.TotalMilliseconds;
     }
+
+    /// <summary>Logs a sample of the drawn pixels <paramref name="afterSeconds"/> from now, labelled; for telling "drew black" from "screen showed black".</summary>
+    public void RequestSample(string label, double afterSeconds) =>
+        _pendingSamples.Add((_clock.Elapsed.TotalSeconds + afterSeconds, label));
 
     private void Sample(string when)
     {

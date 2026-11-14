@@ -107,6 +107,29 @@ public static partial class Program
         windows.WatchDisplay();
         host.ReduceMotion = WindowsSystem.AnimationsOff();
         host.HealthExtra = () => $"input idle {WindowsSystem.InputIdleSeconds():F0} s";
+        // The screen was reported going black when the pointer moves to another
+        // window. Log when it leaves and returns, and sample what was drawn just
+        // after, so the log can tell "drew black" from "screen showed black".
+        bool? pointerOver = null;
+        string PointerWhere()
+        {
+            var c = WindowsSystem.CursorPosition();
+            return c is { } p ? $"pointer at ({p.X}, {p.Y}), {(pointerOver == true ? "over" : "off")} the window" : "pointer unknown";
+        }
+        host.StallContext = PointerWhere;
+        host.Overlay += _ =>
+        {
+            if (WindowsSystem.CursorPosition() is not { } c) return;
+            var over = c.X >= window.Position.X && c.X < window.Position.X + window.Size.X &&
+                       c.Y >= window.Position.Y && c.Y < window.Position.Y + window.Size.Y;
+            if (over == pointerOver) return;
+            var first = pointerOver is null;
+            pointerOver = over;
+            if (first && over) return;
+            log.Info("pointer", $"{(over ? "back over" : "left")} the window, at ({c.X}, {c.Y}); focused window unchanged unless logged");
+            host.RequestSample($"0.5 s after the pointer {(over ? "came back" : "left")}", 0.5);
+            host.RequestSample($"3 s after the pointer {(over ? "came back" : "left")}", 3);
+        };
         log.Info("startup", $"animation effects {(host.ReduceMotion ? "off: no beat flash" : "on")}");
 #endif
         var firstFrameLogged = false;

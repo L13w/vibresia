@@ -91,6 +91,19 @@ internal sealed partial class WindowsSystem : IDisposable
         return SystemParametersInfoW(SpiGetClientAreaAnimation, 0, ref on, 0) && on == 0;
     }
 
+    /// <summary>The pointer's position on the desktop, in physical pixels (the app is per-monitor DPI aware, like the window's position).</summary>
+    public static (int X, int Y)? CursorPosition() => GetCursorPos(out var p) ? (p.X, p.Y) : null;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct Point
+    {
+        public int X, Y;
+    }
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetCursorPos(out Point point);
+
     [StructLayout(LayoutKind.Sequential)]
     private struct LastInputInfo
     {

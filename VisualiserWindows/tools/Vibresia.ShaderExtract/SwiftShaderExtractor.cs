@@ -48,7 +48,8 @@ public static partial class SwiftShaderExtractor
 
     /// <summary>
     /// The <c>modes</c> table — (vibescape, literal name) pairs in upstream's
-    /// order — so the catalog lists built-ins the way the Mac does.
+    /// FunShaders order — which says which shader built-ins exist. The app's
+    /// list order is the Mac's own (VibescapeCatalog), not this.
     /// </summary>
     public static IReadOnlyList<(string Mode, string Literal)> ExtractModeTable(string swiftSource)
     {

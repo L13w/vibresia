@@ -88,6 +88,9 @@ public static partial class Program
             log.Warn("vibescape", $"the last run didn't exit cleanly while showing {start.Id}; starting on {fallback.Id}");
             startNotice = $"Vibresia didn't close properly last time, so it isn't reopening {start.Title}.";
             start = null;
+            // Saved now, or quitting from Kaleidoscope without switching would reopen it next time.
+            settings.Vibescape = fallback.Id;
+            settings.Save(log);
         }
         var pointer = new PointerInput();
         var host = new VibescapeHost(window, gl, log, start ?? fallback, fallback, (u, dt) =>

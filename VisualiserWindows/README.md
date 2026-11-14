@@ -19,7 +19,7 @@ Download the zip from the fork's releases, unzip it, and run `Vibresia.exe`. Win
 
 Vibescapes are drawn at 1× (your display's size before Windows scaling) and stretched to the screen, as the Mac draws them, with the Mac's CRT overlay and beat flash on top; turning off Windows' *Animation effects* turns off the flash. The display is kept awake while Vibresia runs.
 
-Start it with `--windowed` to get a window instead of full screen, or `--composed` for a full-screen window one pixel taller than the monitor (try it if the screen goes black when the pointer moves to another display). The last vibescape and audio source are remembered in `%APPDATA%\Vibresia\settings.json`.
+Start it with `--windowed` to get a window instead of full screen. The last vibescape and audio source are remembered in `%APPDATA%\Vibresia\settings.json`.
 
 ## Your own vibescapes
 

@@ -29,7 +29,7 @@ public sealed class VibescapeHost
     private int _stallsThisPeriod;
     private readonly System.Diagnostics.Stopwatch _work = new();
     private double _lastWorkMs;
-    private readonly List<(double Due, string Label)> _pendingSamples = [];
+
     private bool _sampledEarly;
 
     /// <summary>Seconds after start at which a second frame sample is logged, once things have settled.</summary>
@@ -48,9 +48,6 @@ public sealed class VibescapeHost
 
     /// <summary>The user asked for less motion (Windows "Animation effects" off): no beat flash, as the Mac honours Reduce Motion.</summary>
     public bool ReduceMotion { get; set; }
-
-    /// <summary>Extra text for a stall's log line (where the pointer is, from the app).</summary>
-    public Func<string?>? StallContext { get; set; }
 
     /// <summary>Extra text for the once-a-minute health line (input idle time, from the app).</summary>
     public Func<string?>? HealthExtra { get; set; }
@@ -151,7 +148,7 @@ public sealed class VibescapeHost
             // "Windows or the driver held the frame" (the swap and event handling sit outside it).
             if (stalled)
                 _log.Warn("frame", $"stall: {delta * 1000:F0} ms since the last frame; this app's work on the frame before took {_lastWorkMs:F0} ms; " +
-                                   $"window state {_window.WindowState}" + (StallContext?.Invoke() is { } where ? "; " + where : ""));
+                                   $"window state {_window.WindowState}");
         }
 
         var size = _window.FramebufferSize;
@@ -181,12 +178,6 @@ public sealed class VibescapeHost
         }
         else if (stalled)
             Sample("first frame after the stall");
-        for (var i = _pendingSamples.Count - 1; i >= 0; i--)
-            if (_clock.Elapsed.TotalSeconds >= _pendingSamples[i].Due)
-            {
-                Sample(_pendingSamples[i].Label);
-                _pendingSamples.RemoveAt(i);
-            }
 
         Overlay?.Invoke(delta);
         _renderer?.DrawFlash(_macOverlay.FlashCentreAlpha, _macOverlay.FlashOpacity, size.X, size.Y, scale);
@@ -200,10 +191,6 @@ public sealed class VibescapeHost
         }
         _lastWorkMs = _work.Elapsed.TotalMilliseconds;
     }
-
-    /// <summary>Logs a sample of the drawn pixels <paramref name="afterSeconds"/> from now, labelled; for telling "drew black" from "screen showed black".</summary>
-    public void RequestSample(string label, double afterSeconds) =>
-        _pendingSamples.Add((_clock.Elapsed.TotalSeconds + afterSeconds, label));
 
     private void Sample(string when)
     {

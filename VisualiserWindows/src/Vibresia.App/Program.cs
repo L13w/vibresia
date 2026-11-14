@@ -40,7 +40,7 @@ public static partial class Program
                                 $"{RuntimeInformation.OSDescription} {RuntimeInformation.OSArchitecture}");
             try
             {
-                Run(log, windowed: args.Contains("--windowed"), composed: args.Contains("--composed"));
+                Run(log, windowed: args.Contains("--windowed"));
                 log.Info("startup", "exited normally");
                 return 0;
             }
@@ -59,13 +59,13 @@ public static partial class Program
         }
     }
 
-    private static void Run(Log log, bool windowed, bool composed)
+    private static void Run(Log log, bool windowed)
     {
         var started = Stopwatch.StartNew();
-        var (window, gl, info) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: !windowed), composed);
+        var (window, gl, info) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: !windowed));
         using var _ = window;
         log.Info("gpu", info.ToString());
-        log.Info("startup", $"window up after {started.ElapsedMilliseconds} ms; {(windowed ? "windowed" : composed ? "borderless full screen, 1 px taller than the monitor (--composed)" : "borderless full screen")}; " +
+        log.Info("startup", $"window up after {started.ElapsedMilliseconds} ms; {(windowed ? "windowed" : "borderless full screen, 1 px taller than the monitor")}; " +
                             $"monitor {window.Monitor?.Name}: full {MonitorArea.Primary()?.Size}, work area {window.Monitor?.Bounds.Size}; framebuffer {window.FramebufferSize}");
 
         var settings = Settings.Load(Settings.DefaultPath(), log);
@@ -107,29 +107,6 @@ public static partial class Program
         windows.WatchDisplay();
         host.ReduceMotion = WindowsSystem.AnimationsOff();
         host.HealthExtra = () => $"input idle {WindowsSystem.InputIdleSeconds():F0} s";
-        // The screen was reported going black when the pointer moves to another
-        // window. Log when it leaves and returns, and sample what was drawn just
-        // after, so the log can tell "drew black" from "screen showed black".
-        bool? pointerOver = null;
-        string PointerWhere()
-        {
-            var c = WindowsSystem.CursorPosition();
-            return c is { } p ? $"pointer at ({p.X}, {p.Y}), {(pointerOver == true ? "over" : "off")} the window" : "pointer unknown";
-        }
-        host.StallContext = PointerWhere;
-        host.Overlay += _ =>
-        {
-            if (WindowsSystem.CursorPosition() is not { } c) return;
-            var over = c.X >= window.Position.X && c.X < window.Position.X + window.Size.X &&
-                       c.Y >= window.Position.Y && c.Y < window.Position.Y + window.Size.Y;
-            if (over == pointerOver) return;
-            var first = pointerOver is null;
-            pointerOver = over;
-            if (first && over) return;
-            log.Info("pointer", $"{(over ? "back over" : "left")} the window, at ({c.X}, {c.Y}); focused window unchanged unless logged");
-            host.RequestSample($"0.5 s after the pointer {(over ? "came back" : "left")}", 0.5);
-            host.RequestSample($"3 s after the pointer {(over ? "came back" : "left")}", 3);
-        };
         log.Info("startup", $"animation effects {(host.ReduceMotion ? "off: no beat flash" : "on")}");
 #endif
         var firstFrameLogged = false;

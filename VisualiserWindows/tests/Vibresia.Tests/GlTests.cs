@@ -131,39 +131,8 @@ public sealed class HostLifecycleTests : IDisposable
         Assert.False(host.LastSample!.LooksBlank, host.LastSample.ToString());
     }
 
-    /// <summary>A requested sample is logged once its time comes, so "drew black" can be told from "screen showed black".</summary>
     [Fact]
-    public void RequestedSamplesAreLoggedWhenDue()
-    {
-        var (window, gl, _) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: false));
-        using var log = new Log(_logDir);
-        var host = new VibescapeHost(window, gl, log, Kaleidoscope, Kaleidoscope, (u, _) => TestUniforms.Music(u));
-        host.RequestSample("0.2 s after the pointer left", 0.2);
-        var watch = System.Diagnostics.Stopwatch.StartNew();
-        window.Render += _ => { if (watch.Elapsed.TotalSeconds > 0.6) window.Close(); };
-        window.Run();
-        window.Dispose();
-        Assert.Contains("[frame] 0.2 s after the pointer left: sampled 64 points", File.ReadAllText(log.FilePath));
-    }
-
-    [Fact]
-    public void ComposedFullScreenOverhangsTheMonitorByOnePixel()
-    {
-        var (window, _, _) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: true), composed: true);
-        try
-        {
-            var bounds = MonitorArea.Primary()!.Value;
-            Assert.Equal(bounds.Origin, window.Position);
-            Assert.Equal(bounds.Size + new Silk.NET.Maths.Vector2D<int>(0, 1), window.Size);
-        }
-        finally
-        {
-            window.Dispose();
-        }
-    }
-
-    [Fact]
-    public void FullScreenIsABorderlessWindowCoveringTheMonitor()
+    public void FullScreenIsABorderlessWindowOverhangingTheMonitorByOnePixel()
     {
         var (window, _, _) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: true));
         try
@@ -174,7 +143,7 @@ public sealed class HostLifecycleTests : IDisposable
             Assert.Equal(WindowBorder.Hidden, window.WindowBorder);
             Assert.NotEqual(WindowState.Fullscreen, window.WindowState);
             Assert.Equal(bounds.Origin, window.Position);
-            Assert.Equal(bounds.Size, window.Size);
+            Assert.Equal(bounds.Size + new Silk.NET.Maths.Vector2D<int>(0, 1), window.Size); // a pixel taller, so Windows keeps composing it
         }
         finally
         {

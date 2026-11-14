@@ -24,6 +24,7 @@ public sealed class LoopbackSource : IAudioSource
     private bool _stopping;
 
     public string Name { get; private set; } = "PC sound";
+    public string FormatInfo { get; private set; } = "not started";
 
     public event Action<string>? Failed;
     public event Action? DeviceChanged;
@@ -53,6 +54,7 @@ public sealed class LoopbackSource : IAudioSource
         _encoding = EncodingOf(format)
             ?? throw new NotSupportedException($"unsupported capture format {format.Encoding} {format.BitsPerSample}-bit");
         _channels = format.Channels;
+        FormatInfo = $"device mix {mix.Encoding} {mix.BitsPerSample}-bit {mix.Channels} ch; capturing {_encoding} {format.Channels} ch";
         ring.Reset(format.SampleRate);
         _ring = ring;
         _stopping = false;

@@ -4,16 +4,22 @@ using Silk.NET.OpenGL;
 namespace Vibresia.Render;
 
 /// <summary>What the driver says it is. Logged at startup so a failure on a GPU we never see can be diagnosed from the log.</summary>
-public sealed record GlInfo(string Vendor, string Renderer, string Version, string ShadingLanguage)
+public sealed record GlInfo(string Vendor, string Renderer, string Version, string ShadingLanguage, string Profile)
 {
-    public static GlInfo Query(GL gl) => new(
-        gl.GetStringS(StringName.Vendor) ?? "?",
-        gl.GetStringS(StringName.Renderer) ?? "?",
-        gl.GetStringS(StringName.Version) ?? "?",
-        gl.GetStringS(StringName.ShadingLanguageVersion) ?? "?");
+    public static GlInfo Query(GL gl)
+    {
+        gl.GetInteger(GetPName.ContextProfileMask, out var mask);
+        var profile = (mask & 0x1) != 0 ? "core" : (mask & 0x2) != 0 ? "compatibility" : $"unknown (mask {mask})";
+        return new GlInfo(
+            gl.GetStringS(StringName.Vendor) ?? "?",
+            gl.GetStringS(StringName.Renderer) ?? "?",
+            gl.GetStringS(StringName.Version) ?? "?",
+            gl.GetStringS(StringName.ShadingLanguageVersion) ?? "?",
+            profile);
+    }
 
     public override string ToString() =>
-        $"vendor='{Vendor}' renderer='{Renderer}' version='{Version}' glsl='{ShadingLanguage}'";
+        $"vendor='{Vendor}' renderer='{Renderer}' version='{Version}' glsl='{ShadingLanguage}' profile={Profile}";
 }
 
 public static partial class GlVersion

@@ -10,6 +10,9 @@ public interface IAudioSource : IDisposable
     /// <summary>For the log and the screen: "Speakers (Realtek) loopback", "Demo tone".</summary>
     string Name { get; }
 
+    /// <summary>For the log: sample format, channels and buffer, so a format problem can be told from silence.</summary>
+    string FormatInfo { get; }
+
     /// <summary>Resets the ring to the source's sample rate, then starts writing to it.</summary>
     void Start(AudioRingBuffer ring);
 

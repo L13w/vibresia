@@ -18,6 +18,7 @@ public sealed class DemoTone : IAudioSource
     private volatile bool _running;
 
     public string Name => "Demo tone";
+    public string FormatInfo => "synthesised mono float, 10 ms chunks";
 
     public event Action<string>? Failed { add { } remove { } }
     public event Action? DeviceChanged { add { } remove { } }

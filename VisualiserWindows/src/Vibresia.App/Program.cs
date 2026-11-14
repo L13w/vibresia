@@ -66,8 +66,8 @@ public static partial class Program
         log.Info("startup", $"window up after {started.ElapsedMilliseconds} ms; {(windowed ? "windowed" : "borderless full screen")}; " +
                             $"monitor {window.Monitor?.Name}: full {MonitorArea.Primary()?.Size}, work area {window.Monitor?.Bounds.Size}; framebuffer {window.FramebufferSize}");
 
+        using var sources = new AudioSources();
         using var audio = new AudioPipeline(log);
-        var sources = new AudioSources();
         audio.Use(sources.Preferred);
 
         var host = new VibescapeHost(window, gl, log, StartVibescape, (u, dt) => audio.Tick(u, dt));
@@ -87,8 +87,15 @@ public static partial class Program
         host.Overlay += dt =>
         {
             elapsed += dt;
-            var (text, tone) = StatusText(audio, sources, elapsed < announceUntil);
-            overlay.Show(text, tone);
+            var (text, severity) = AudioStatusMessage.For(audio.Status, audio.FailureMessage, audio.SourceName,
+                onDemo: ReferenceEquals(audio.Source, sources.Demo), canSwitch: sources.HasLoopback,
+                announce: elapsed < announceUntil);
+            overlay.Show(text, severity switch
+            {
+                MessageSeverity.Error => StatusTone.Error,
+                MessageSeverity.Hint => StatusTone.Hint,
+                _ => StatusTone.Info,
+            });
             overlay.Render((float)dt);
         };
 
@@ -99,26 +106,12 @@ public static partial class Program
                 else if (key == Key.F12) OpenFolder(log);
                 else if (key == Key.D)
                 {
-                    audio.Use(sources.Toggle(audio.SourceName));
+                    audio.Use(SourceToggle.Next(audio.Source, sources.Demo, sources.Loopback));
                     announceUntil = elapsed + 4.0;
                 }
             };
 
         window.Run();
-    }
-
-    private static (string? Text, StatusTone Tone) StatusText(AudioPipeline audio, AudioSources sources, bool announce)
-    {
-        var other = sources.HasLoopback ? " Press D to switch to the demo tone." : "";
-        return audio.Status switch
-        {
-            AudioStatus.Failed => ($"Can't hear this PC's sound: {audio.FailureMessage}{other}", StatusTone.Error),
-            AudioStatus.NothingPlaying when audio.SourceName == sources.Demo.Name =>
-                ("The demo tone has gone quiet; press D to restart it.", StatusTone.Error),
-            AudioStatus.NothingPlaying => ($"Nothing playing. Play some music, or press D for the demo tone.", StatusTone.Hint),
-            _ when announce => ($"Listening to {audio.SourceName}" + (sources.HasLoopback ? " (D switches)" : ""), StatusTone.Info),
-            _ => (null, StatusTone.Info),
-        };
     }
 
     private static void OpenFolder(Log log)

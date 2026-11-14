@@ -58,17 +58,29 @@ public sealed class Log : IDisposable
             new UTF8Encoding(false));
 
     // vibresia.log → .1 → .2 …; the oldest beyond `keep` is dropped.
+    // A failed move (another process holding a file open) must never leave
+    // the logger without a writer: the crash handler logs through it too.
     private void Roll()
     {
         _writer.Dispose();
-        for (var i = _keep - 1; i >= 1; i--)
+        try
         {
-            var from = i == 1 ? FilePath : $"{FilePath}.{i - 1}";
-            var to = $"{FilePath}.{i}";
-            if (File.Exists(from)) File.Move(from, to, overwrite: true);
+            for (var i = _keep - 1; i >= 1; i--)
+            {
+                var from = i == 1 ? FilePath : $"{FilePath}.{i - 1}";
+                var to = $"{FilePath}.{i}";
+                if (File.Exists(from)) File.Move(from, to, overwrite: true);
+            }
+            if (_keep <= 1) File.Delete(FilePath);
         }
-        if (_keep <= 1) File.Delete(FilePath);
-        _writer = Open();
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // Keep appending to the current file rather than lose the log.
+        }
+        finally
+        {
+            _writer = Open();
+        }
     }
 
     public void Dispose()

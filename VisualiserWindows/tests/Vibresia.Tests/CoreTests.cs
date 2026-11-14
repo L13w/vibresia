@@ -30,6 +30,16 @@ public sealed class LogTests : IDisposable
     }
 
     [Fact]
+    public void KeepsLoggingWhenARollCannotMoveFiles()
+    {
+        // A directory squatting on the roll target makes the move throw.
+        Directory.CreateDirectory(Path.Combine(_dir, "vibresia.log.1"));
+        using (var log = new Log(_dir, maxBytes: 120, keep: 3))
+            for (var i = 0; i < 10; i++) log.Info("t", $"line {i} padding padding padding");
+        Assert.Contains("line 9", File.ReadAllText(Path.Combine(_dir, Log.FileName)));
+    }
+
+    [Fact]
     public void AppendsAcrossRuns()
     {
         using (var a = new Log(_dir)) a.Info("t", "first");

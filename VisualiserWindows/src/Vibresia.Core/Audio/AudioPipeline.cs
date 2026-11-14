@@ -36,9 +36,20 @@ public sealed class AudioPipeline : IDisposable
     private volatile bool _pendingDeviceChange;
     private long _lastWritten;
     private double _silentFor;
+    private double _noDataFor;
+    private float[] _gapFill = new float[4096];
+
+    /// <summary>
+    /// How long a source may deliver nothing before the gap is filled with
+    /// silence. WASAPI loopback stops delivering entirely while nothing plays;
+    /// without the fill the analyser would keep re-reading the last window of
+    /// music and the visuals would never settle.
+    /// </summary>
+    public const double GapFillAfterSeconds = 0.1;
 
     public AudioStatus Status { get; private set; } = AudioStatus.None;
     public string? SourceName => _source?.Name;
+    public IAudioSource? Source => _source;
     public string? FailureMessage { get; private set; }
     public AudioAnalyzer Analyzer => _analyzer;
     public MotionClocks Clocks => _clocks;
@@ -56,14 +67,18 @@ public sealed class AudioPipeline : IDisposable
         _source = source;
         source.Failed += OnFailed;
         source.DeviceChanged += OnDeviceChanged;
+        // Flags raised by the previous source must not land on this one.
+        _pendingFailure = null;
+        _pendingDeviceChange = false;
         FailureMessage = null;
         _silentFor = 0;
+        _noDataFor = 0;
         _lastWritten = 0;
         try
         {
             source.Start(_ring);
             Status = AudioStatus.Playing;
-            _log.Info("audio", $"started {source.Name} at {_ring.SampleRate} Hz");
+            _log.Info("audio", $"started {source.Name} at {_ring.SampleRate} Hz; {source.FormatInfo}");
         }
         catch (Exception e) when (e is InvalidOperationException or IOException or UnauthorizedAccessException
                                       or System.Runtime.InteropServices.COMException or NotSupportedException)
@@ -90,8 +105,9 @@ public sealed class AudioPipeline : IDisposable
             Use(current);
         }
 
+        var arriving = FillGaps(dt);
         _analyzer.Tick();
-        TrackSilence(dt);
+        TrackSilence(arriving, dt);
         var idle = Status is AudioStatus.Failed or AudioStatus.None;
         var snap = new AudioReading(_analyzer.Rms, _analyzer.Bass, _analyzer.Mid, _analyzer.Treble, _analyzer.Level,
             _analyzer.Beat, _analyzer.BeatStrength, _analyzer.Bpm, idle);
@@ -99,12 +115,25 @@ public sealed class AudioPipeline : IDisposable
         _clocks.Fill(u, _analyzer, snap);
     }
 
-    private void TrackSilence(double dt)
+    /// <returns>Whether the source delivered anything since the last frame.</returns>
+    private bool FillGaps(double dt)
     {
-        if (Status is AudioStatus.Failed or AudioStatus.None) return;
         var written = _ring.TotalWritten;
         var arriving = written != _lastWritten;
-        _lastWritten = written;
+        _noDataFor = arriving ? 0 : _noDataFor + dt;
+        if (_noDataFor >= GapFillAfterSeconds)
+        {
+            var n = (int)Math.Min(_ring.Capacity, Math.Round(_ring.SampleRate * Math.Min(dt, 0.25)));
+            if (_gapFill.Length < n) _gapFill = new float[n];
+            _ring.Write(_gapFill.AsSpan(0, n));
+        }
+        _lastWritten = _ring.TotalWritten;
+        return arriving;
+    }
+
+    private void TrackSilence(bool arriving, double dt)
+    {
+        if (Status is AudioStatus.Failed or AudioStatus.None) return;
         var audible = arriving && _analyzer.Rms >= AudibleRms;
         _silentFor = audible ? 0 : _silentFor + dt;
 

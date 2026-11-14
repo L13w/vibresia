@@ -190,6 +190,7 @@ public class AudioPipelineTests : IDisposable
         public AudioRingBuffer? Ring;
         public int Starts;
         public string Name => "fake";
+        public string FormatInfo => "fake format";
         public event Action<string>? Failed;
         public event Action? DeviceChanged;
         public void Start(AudioRingBuffer ring) { Ring = ring; ring.Reset(48000); Starts++; }
@@ -228,6 +229,13 @@ public class AudioPipelineTests : IDisposable
         for (var i = 0; i < 2 * 60; i++) Tick();
         Assert.Equal(AudioStatus.NothingPlaying, pipe.Status);
         Assert.Equal(0f, u.Idle); // a running source is not "idle": vibescapes settle via uActive
+        // And they do settle: no data must not mean "the last window of music, forever".
+        Assert.True(u.Active < 0.01f, $"active {u.Active}");
+        Assert.True(u.Bass < 0.01f && u.Level < 0.01f, $"bass {u.Bass} level {u.Level}");
+        Assert.All(u.Bands, b => Assert.True(b < 0.01f, $"band {b}"));
+        var frozen = (u.Time, u.Beats, u.Scroll);
+        for (var i = 0; i < 30; i++) Tick();
+        Assert.Equal(frozen, (u.Time, u.Beats, u.Scroll)); // stillness in silence
 
         src.Feed(t => AnalyserRig.Sine(t, 200), 10, Tick);
         Assert.Equal(AudioStatus.Playing, pipe.Status);
@@ -265,6 +273,32 @@ public class AudioPipelineTests : IDisposable
         Assert.Equal(1f, u.Idle);
         Assert.True(u.Active < 0.01f, $"active {u.Active}");
         Assert.Contains("ERROR [audio] device unplugged", File.ReadAllText(log.FilePath));
+    }
+
+    [Fact]
+    public void AFailureFromThePreviousSourceDoesNotLandOnTheNextOne()
+    {
+        using var log = new Log(_dir);
+        using var pipe = new AudioPipeline(log);
+        var old = new FakeSource();
+        var next = new FakeSource();
+        var u = new FrameUniforms();
+        pipe.Use(old);
+        old.Fail("old device gone"); // raised on the audio thread, not yet acted on
+        old.ChangeDevice();
+        pipe.Use(next);
+        next.Feed(t => AnalyserRig.Sine(t, 200), 10, () => pipe.Tick(u, 1 / 60.0));
+        Assert.Equal(AudioStatus.Playing, pipe.Status);
+        Assert.Null(pipe.FailureMessage);
+        Assert.Equal(1, next.Starts);
+    }
+
+    [Fact]
+    public void StartLogLineCarriesTheSourceFormat()
+    {
+        using (var log = new Log(_dir))
+        using (var pipe = new AudioPipeline(log)) pipe.Use(new FakeSource());
+        Assert.Contains("started fake at 48000 Hz; fake format", File.ReadAllText(Path.Combine(_dir, Log.FileName)));
     }
 
     [Fact]
@@ -328,5 +362,64 @@ public class RealFftTests
         // Textbook |X[k]| = N·A/2; vDSP's real FFT doubles it → N·A.
         Assert.Equal(n * 0.5f, mags[bin], 1);
         Assert.True(mags.Where((_, k) => k != bin).All(m => m < 0.01f));
+    }
+}
+
+public class AudioStatusMessageTests
+{
+    [Fact]
+    public void FailureIsAnErrorAndOffersTheDemoOnlyWhenThereIsOne()
+    {
+        var (text, sev) = AudioStatusMessage.For(AudioStatus.Failed, "device gone", "PC sound", false, canSwitch: true, false);
+        Assert.Equal(MessageSeverity.Error, sev);
+        Assert.Contains("device gone", text);
+        Assert.Contains("press D", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("press D", AudioStatusMessage.For(AudioStatus.Failed, "x", "y", false, canSwitch: false, false).Text!, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SilenceIsAHintOnLoopbackButAnErrorOnTheDemo()
+    {
+        Assert.Equal(MessageSeverity.Hint, AudioStatusMessage.For(AudioStatus.NothingPlaying, null, "PC sound", onDemo: false, true, false).Severity);
+        Assert.Equal(MessageSeverity.Error, AudioStatusMessage.For(AudioStatus.NothingPlaying, null, "Demo tone", onDemo: true, true, false).Severity);
+    }
+
+    [Fact]
+    public void PlayingSaysNothingUnlessASourceJustStarted()
+    {
+        Assert.Null(AudioStatusMessage.For(AudioStatus.Playing, null, "PC sound", false, true, announce: false).Text);
+        Assert.Equal("Listening to PC sound (D switches)", AudioStatusMessage.For(AudioStatus.Playing, null, "PC sound", false, true, announce: true).Text);
+    }
+}
+
+public class SourceToggleTests
+{
+    private sealed class Named(string name) : IAudioSource
+    {
+        public string Name => name;
+        public string FormatInfo => "";
+        public event Action<string>? Failed { add { } remove { } }
+        public event Action? DeviceChanged { add { } remove { } }
+        public void Start(AudioRingBuffer ring) { }
+        public void Stop() { }
+        public void Dispose() { }
+    }
+
+    [Fact]
+    public void SwitchesBetweenLoopbackAndDemoByIdentity()
+    {
+        var demo = new Named("Demo tone");
+        var loop = new Named("Demo tone"); // same display name: identity, not name, must decide
+        Assert.Same(loop, SourceToggle.Next(demo, demo, loop));
+        Assert.Same(demo, SourceToggle.Next(loop, demo, loop));
+        Assert.Same(demo, SourceToggle.Next(null, demo, loop));
+    }
+
+    [Fact]
+    public void WithoutLoopbackItStaysOnTheDemo()
+    {
+        var demo = new Named("d");
+        Assert.Same(demo, SourceToggle.Next(demo, demo, null));
+        Assert.Same(demo, SourceToggle.Next(null, demo, null));
     }
 }

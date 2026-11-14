@@ -9,7 +9,7 @@ namespace Vibresia.Core;
 /// </summary>
 public sealed class FrameUniforms
 {
-    public const int BandCount = 96;
+    public const int BandCount = Audio.AudioAnalyzer.BandCount;
 
     public float Time;
     public float Bass, Mid, Treble, Level;

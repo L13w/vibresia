@@ -63,7 +63,7 @@ public static partial class Program
         using var _ = window;
         log.Info("gpu", info.ToString());
         log.Info("startup", $"window up after {started.ElapsedMilliseconds} ms; {(windowed ? "windowed" : "borderless full screen")}; " +
-                            $"monitor {window.Monitor?.Name} {window.Monitor?.Bounds.Size}; framebuffer {window.FramebufferSize}");
+                            $"monitor {window.Monitor?.Name}: full {MonitorArea.Primary()?.Size}, work area {window.Monitor?.Bounds.Size}; framebuffer {window.FramebufferSize}");
 
         var host = new VibescapeHost(window, gl, log, StartVibescape, SyntheticPulse.Fill);
         var firstFrameLogged = false;

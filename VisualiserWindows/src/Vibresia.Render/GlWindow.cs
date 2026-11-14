@@ -39,10 +39,10 @@ public static class GlWindow
 
         var window = Window.Create(options);
         window.Initialize();
-        if (options.WindowBorder == WindowBorder.Hidden && window.Monitor is { } monitor)
+        if (options.WindowBorder == WindowBorder.Hidden && MonitorArea.Primary() is { } screen)
         {
-            window.Position = monitor.Bounds.Origin;
-            window.Size = monitor.Bounds.Size;
+            window.Position = screen.Origin;
+            window.Size = screen.Size;
         }
 
         var gl = GL.GetApi(window);

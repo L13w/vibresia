@@ -133,7 +133,9 @@ public sealed class HostLifecycleTests : IDisposable
         var (window, _, _) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: true));
         try
         {
-            var bounds = window.Monitor!.Bounds;
+            // The whole monitor, not Silk's work area (which excludes the taskbar).
+            // Xvfb has no taskbar, so here the two coincide; the owner's PC is where they differ.
+            var bounds = MonitorArea.Primary()!.Value;
             Assert.Equal(WindowBorder.Hidden, window.WindowBorder);
             Assert.NotEqual(WindowState.Fullscreen, window.WindowState);
             Assert.Equal(bounds.Origin, window.Position);

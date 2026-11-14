@@ -1,0 +1,48 @@
+using Silk.NET.Core.Contexts;
+using Silk.NET.Maths;
+using Silk.NET.OpenGL;
+using Silk.NET.Windowing;
+
+namespace Vibresia.Render;
+
+/// <summary>Creates a window with an OpenGL 3.3 core context, or says plainly why it can't.</summary>
+public static class GlWindow
+{
+    public static WindowOptions Options(bool visible, bool fullscreen, int major = 3, int minor = 3)
+    {
+        var o = WindowOptions.Default with
+        {
+            Title = "Vibresia",
+            Size = new Vector2D<int>(1280, 720),
+            IsVisible = visible,
+            VSync = true,
+            WindowState = fullscreen ? WindowState.Fullscreen : WindowState.Normal,
+            API = new GraphicsAPI(ContextAPI.OpenGL, ContextProfile.Core, ContextFlags.ForwardCompatible,
+                new APIVersion(major, minor)),
+        };
+        return o;
+    }
+
+    /// <summary>Initialises the window and its GL context. Throws <see cref="GlUnavailableException"/> when the driver refuses.</summary>
+    public static (IWindow Window, GL Gl, GlInfo Info) Create(WindowOptions options)
+    {
+        var (major, minor) = (options.API.Version.MajorVersion, options.API.Version.MinorVersion);
+        if (GlProbe.CannotCreate(major, minor) is { } reason)
+            throw new GlUnavailableException(
+                $"This PC's graphics driver couldn't provide OpenGL {major}.{minor} (core profile), which Vibresia needs. Updating the graphics driver usually fixes this.",
+                new InvalidOperationException(reason));
+
+        var window = Window.Create(options);
+        window.Initialize();
+
+        var gl = GL.GetApi(window);
+        var info = GlInfo.Query(gl);
+        if (!GlVersion.MeetsRequirement(info.Version))
+        {
+            window.Dispose();
+            throw new GlUnavailableException(
+                $"This PC's graphics driver offers OpenGL {info.Version}; Vibresia needs 3.3 or newer. Updating the graphics driver usually fixes this.");
+        }
+        return (window, gl, info);
+    }
+}

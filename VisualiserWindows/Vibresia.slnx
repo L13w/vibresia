@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Vibresia.App/Vibresia.App.csproj" />
+    <Project Path="src/Vibresia.Core/Vibresia.Core.csproj" />
+    <Project Path="src/Vibresia.Render/Vibresia.Render.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Vibresia.Tests/Vibresia.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Vibresia.ShaderExtract/Vibresia.ShaderExtract.csproj" />
+  </Folder>
+</Solution>

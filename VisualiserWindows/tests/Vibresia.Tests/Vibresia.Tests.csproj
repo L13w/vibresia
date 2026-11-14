@@ -1,0 +1,33 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    
+    
+    <IsPackable>false</IsPackable>
+    <!-- A concrete RID copies native libraries (GLFW) beside the test binary; with a
+         portable build Silk.NET's loader can't find them under runtimes/ in the test host. -->
+    <RuntimeIdentifier Condition="'$(OS)' != 'Windows_NT'">linux-x64</RuntimeIdentifier>
+    <RuntimeIdentifier Condition="'$(OS)' == 'Windows_NT'">win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+    <PackageReference Include="JunitXml.TestLogger" Version="8.1.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Vibresia.Core\Vibresia.Core.csproj" />
+    <ProjectReference Include="..\..\src\Vibresia.Render\Vibresia.Render.csproj" />
+    <ProjectReference Include="..\..\tools\Vibresia.ShaderExtract\Vibresia.ShaderExtract.csproj" />
+  </ItemGroup>
+
+</Project>

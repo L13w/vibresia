@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- WinExe: no console window behind the visuals on Windows. Errors reach the user as a message box and the log. -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>Vibresia</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Vibresia.Core\Vibresia.Core.csproj" />
+    <ProjectReference Include="..\Vibresia.Render\Vibresia.Render.csproj" />
+  </ItemGroup>
+</Project>

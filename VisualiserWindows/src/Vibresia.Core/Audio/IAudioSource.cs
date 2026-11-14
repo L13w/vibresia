@@ -13,6 +13,13 @@ public interface IAudioSource : IDisposable
     /// <summary>For the log: sample format and channels, so a format problem can be told from silence.</summary>
     string FormatInfo { get; }
 
+    /// <summary>
+    /// For the log: the output volume setting the captured sound may have
+    /// passed through ("Windows volume 35%"), so a quiet signal can be told
+    /// apart from a turned-down one. Null when it doesn't apply.
+    /// </summary>
+    string? LevelInfo => null;
+
     /// <summary>Resets the ring to the source's sample rate, then starts writing to it.</summary>
     void Start(AudioRingBuffer ring);
 

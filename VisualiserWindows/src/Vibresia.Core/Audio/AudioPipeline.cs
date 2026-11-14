@@ -115,7 +115,8 @@ public sealed class AudioPipeline : IDisposable
         _clocks.Advance(snap, dt);
         _clocks.Fill(u, _analyzer, snap);
         if (_health.Add(_analyzer.Rms, _analyzer.Gate, u.Active, _analyzer.Bpm, dt) is { } summary)
-            _log.Info("audio", $"{_source?.Name ?? "no source"}, {Status}: {summary}");
+            _log.Info("audio", $"{_source?.Name ?? "no source"}, {Status}: {summary}" +
+                               (_source?.LevelInfo is { } level ? "; " + level : ""));
     }
 
     /// <returns>Whether the source delivered anything since the last frame.</returns>

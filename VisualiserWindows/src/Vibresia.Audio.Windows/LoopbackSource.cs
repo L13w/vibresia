@@ -15,6 +15,28 @@ namespace Vibresia.Audio.Windows;
 public sealed class LoopbackSource : IAudioSource
 {
     private readonly MMDeviceEnumerator _devices = new();
+    private MMDevice? _device;
+
+    /// <summary>
+    /// The playback device's volume slider and mute. Whether loopback capture
+    /// is taken before or after this volume varies by driver, so it is logged
+    /// beside the measured loudness rather than assumed.
+    /// </summary>
+    public string? LevelInfo
+    {
+        get
+        {
+            try
+            {
+                var v = _device?.AudioEndpointVolume;
+                return v is null ? null : $"Windows volume {v.MasterVolumeLevelScalar * 100:F0}%{(v.Mute ? ", muted" : "")}";
+            }
+            catch (System.Runtime.InteropServices.COMException)
+            {
+                return null; // the device went away; the next start picks up the new one
+            }
+        }
+    }
     private readonly MMDeviceNotificationClient _notifications;
     private WasapiRecorder? _capture;
     private AudioRingBuffer? _ring;
@@ -42,6 +64,8 @@ public sealed class LoopbackSource : IAudioSource
     public void Start(AudioRingBuffer ring)
     {
         var device = _devices.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+        if (!ReferenceEquals(_device, device)) _device?.Dispose();
+        _device = device;
         Name = $"PC sound ({device.FriendlyName})";
         // Ask for 32-bit float at the device's own rate and channel count (shared
         // mode converts sample formats, never rates), so the format is known
@@ -110,6 +134,7 @@ public sealed class LoopbackSource : IAudioSource
     public void Dispose()
     {
         Stop();
+        _device?.Dispose();
         _notifications.Dispose();
         _devices.Dispose();
     }

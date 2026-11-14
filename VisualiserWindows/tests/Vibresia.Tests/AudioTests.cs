@@ -191,6 +191,7 @@ public class AudioPipelineTests : IDisposable
         public int Starts;
         public string Name => "fake";
         public string FormatInfo => "fake format";
+        public string? LevelInfo => "fake volume 42%";
         public event Action<string>? Failed;
         public event Action? DeviceChanged;
         public void Start(AudioRingBuffer ring) { Ring = ring; ring.Reset(48000); Starts++; }
@@ -327,6 +328,7 @@ public class AudioPipelineTests : IDisposable
         }
         var text = File.ReadAllText(Path.Combine(_dir, Log.FileName));
         Assert.Matches(@"\[audio\] fake, Playing: 60 s: rms avg 0\.\d+ max 0\.\d+; gate closed \d+% partly \d+%; activity avg", text);
+        Assert.Matches(@"\[audio\] fake, Playing: 60 s: .*; fake volume 42%", text); // the volume the sound may have passed through
     }
 
     [Fact]

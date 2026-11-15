@@ -36,6 +36,9 @@ public sealed class VibescapeHost
 
     public long FramesDrawn { get; private set; }
 
+    /// <summary>A hidden window is shown as the second frame draws, so the first has already been swapped onto it.</summary>
+    public const int ShowAfterFrames = 2;
+
     /// <summary>The most recent sample of drawn pixels, for the log and for tests.</summary>
     public FrameSample? LastSample { get; private set; }
 
@@ -183,6 +186,15 @@ public sealed class VibescapeHost
         _macOverlay.Advance(_uniforms, SourceLive, ReduceMotion, delta);
         _renderer.Draw(_uniforms, delta, size.X, size.Y);
         FramesDrawn++;
+
+        // A window created hidden is shown once a frame is on screen to show:
+        // shown at creation, Windows paints it white until the first frame,
+        // and it shows at its default size in the corner before it is placed.
+        if (!_window.IsVisible && FramesDrawn == ShowAfterFrames)
+        {
+            _window.IsVisible = true;
+            _log.Info("startup", "window shown, with a frame already drawn");
+        }
 
         // Read back what was actually drawn, before the swap and before the
         // CRT darkens it: tells "we drew black" apart from "we drew a picture

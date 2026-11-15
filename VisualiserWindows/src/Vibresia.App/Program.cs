@@ -62,7 +62,8 @@ public static partial class Program
         var started = Stopwatch.StartNew();
         // The Mac opens in a window, and so does this; --fullscreen starts full screen.
         var fullScreen = args.Contains("--fullscreen");
-        var (window, gl, info) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: fullScreen));
+        // Hidden until it has a picture to show (VibescapeHost shows it), so there is no white flash at a default size and place.
+        var (window, gl, info) = GlWindow.Create(GlWindow.Options(visible: false, fullscreen: fullScreen));
         using var _ = window;
         log.Info("gpu", info.ToString());
         log.Info("startup", $"window up after {started.ElapsedMilliseconds} ms; {(fullScreen ? "borderless full screen, 1 px taller than the monitor" : $"windowed at {window.Size}")}; " +

@@ -260,6 +260,48 @@ public sealed class VibescapeGlTests : IDisposable
     }
 
     /// <summary>
+    /// The app's window starts hidden and appears only once a frame has been
+    /// drawn, so it never shows white at a default size before its first
+    /// picture: hidden for the first frame, which still draws a picture, and
+    /// visible from the frame after.
+    /// </summary>
+    [Fact]
+    public void AHiddenWindowDrawsItsFirstFrameThenAppears()
+    {
+        var (window, gl, _) = GlWindow.Create(GlWindow.Options(visible: false, fullscreen: false));
+        try
+        {
+            using var log = new Log(_logDir);
+            var start = Catalog.Find(VibescapeCatalog.Default)!;
+            var host = new VibescapeHost(window, gl, log, start, start, (u, _) => TestUniforms.Music(u));
+            bool? visibleAtFirst = null, visibleLater = null;
+            FrameSample? first = null;
+            host.Overlay += _ =>
+            {
+                if (host.FramesDrawn == 1)
+                {
+                    visibleAtFirst = window.IsVisible;
+                    first = host.LastSample;
+                }
+                if (host.FramesDrawn == 3)
+                {
+                    visibleLater = window.IsVisible;
+                    window.Close();
+                }
+            };
+            window.Run();
+            Assert.False(visibleAtFirst, "the first frame is drawn while the window is still hidden");
+            Assert.True(visibleLater, "the window appears once a frame is on it");
+            Assert.False(first!.LooksBlank, "drawing into the hidden window still drew a picture");
+            Assert.Contains("window shown, with a frame already drawn", File.ReadAllText(log.FilePath));
+        }
+        finally
+        {
+            window.Dispose();
+        }
+    }
+
+    /// <summary>
     /// The intro, the credits and the View All panel draw without a GL error:
     /// the intro takes every click while it is up, an open panel takes every
     /// click, the panel's built-in pictures decode, and drawing a custom

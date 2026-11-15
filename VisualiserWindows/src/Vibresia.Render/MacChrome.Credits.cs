@@ -8,16 +8,16 @@ namespace Vibresia.Render;
 /// The Mac's credits button and popover (AboutButton): "🩷 from Minith Labs"
 /// in the bottom-right corner, which stays when the rest of the chrome
 /// hides, opening the credits with the two settings the owner chose to
-/// bring over (Start at login, Float above other apps). The coffee button and
-/// the "Proudly Shareware" share link are left out by the owner's choice; the
+/// bring over (Start at login, Float above other apps). The "Proudly
+/// Shareware" section (its coffee button and the paragraph asking for one)
+/// and the share link above the button are left out by the owner's choice: an
+/// unofficial port shouldn't ask for money on Minith Labs' behalf. The
 /// Mac's song identification, analytics, music-app watcher and legal links
 /// are out of this port's scope.
 /// </summary>
 public sealed partial class MacChrome
 {
     private const string CreditsLabel = "♥ from Minith Labs";
-    private const string SharewareText =
-        "Someone who has used what we've made took the time to say so, and this is how. Every coffee helps us keep building, and it means a lot that you noticed.";
 
     // 🩷, drawn: the interface fonts have no colour emoji.
     private static readonly Vector4 PinkHeart = new(1f, 0.6f, 0.78f, 1f);
@@ -56,13 +56,10 @@ public sealed partial class MacChrome
 
         var loginDetail = v.StartAtLogin ? "Vibresia opens when you sign in to Windows" : "Open Vibresia when you sign in";
         var floatDetail = v.FloatOnTop ? "Vibresia stays above other windows" : "Vibresia goes behind other apps";
-        var paragraph = MeasureWrapped(Face.Sans, 11, SharewareText, inner);
         float ToggleHeight(string detail) => (15 + 2) * s + MeasureWrapped(Face.Sans, 9, detail, inner).Y;
         var height = 2 * padPoints * s
                      + (13 + 4 + 10) * s * 1.25f                    // VIBRESIA, minithlabs.com
                      + gap + gap                                    // divider
-                     + (12 * 1.25f + 6) * s + paragraph.Y          // Proudly Shareware
-                     + gap + gap
                      + (9 * 1.25f + 10) * s + ToggleHeight(loginDetail)
                      + gap + gap
                      + (9 * 1.25f + 10) * s + ToggleHeight(floatDetail);
@@ -101,11 +98,6 @@ public sealed partial class MacChrome
         DrawText(d, Face.Mono, 10, new Vector2(x, y), "minithlabs.com", Colour(Cyan, alpha));
         if (Clicked(ref f, new Vector2(x, y), siteMax)) actions.OpenWebsite(CreditsLinks.MakerSite);
         y = siteMax.Y;
-
-        y = Divider(d, x, y, inner, gap, alpha);
-        DrawText(d, Face.SansSemibold, 12, new Vector2(x, y), "Proudly Shareware", Colour(1, 1, 1, alpha));
-        y += (12 * 1.25f + 6) * s;
-        y = DrawWrapped(d, Face.Sans, 11, SharewareText, new Vector2(x, y), inner, Colour(0.7f, 0.7f, 0.7f, alpha));
 
         y = Divider(d, x, y, inner, gap, alpha);
         y = SectionTitle(d, "STARTUP", x, y, alpha);

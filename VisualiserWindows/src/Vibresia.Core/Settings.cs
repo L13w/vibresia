@@ -13,7 +13,7 @@ public enum AudioChoice { Loopback, Microphone, Demo }
 
 /// <summary>
 /// settings.json in the roaming app-data folder: the vibescape to start on,
-/// the audio source, and whether to keep the display awake (data-model.md). A missing or unreadable file means
+/// the audio source, the palette, and whether to keep the display awake (data-model.md). A missing or unreadable file means
 /// defaults. Keys this version doesn't know are kept when the file is
 /// rewritten, so a later version's settings survive a run of this one.
 /// </summary>
@@ -27,6 +27,13 @@ public sealed class Settings
     public string FilePath { get; }
     public VibescapeId Vibescape { get; set; } = VibescapeCatalog.Default;
     public AudioChoice Audio { get; set; } = AudioChoice.Loopback;
+
+    /// <summary>
+    /// The palette last picked, as an index into <see cref="Palette.All"/>. Stored by
+    /// name so reordering the palettes can't swap one for another; an unknown
+    /// name means NEON. The Mac doesn't remember it (an owner-chosen difference).
+    /// </summary>
+    public int PaletteIndex { get; set; }
 
     /// <summary>Ask Windows not to dim or turn off the display while running. Off by default, as the Mac doesn't ask.</summary>
     public bool KeepDisplayAwake { get; set; }
@@ -61,8 +68,10 @@ public sealed class Settings
                 "microphone" => AudioChoice.Microphone,
                 _ => AudioChoice.Loopback,
             };
+            var paletteName = ReadString(root, "palette");
+            s.PaletteIndex = Math.Max(0, Palette.All.ToList().FindIndex(p => p.Name == paletteName));
             s.KeepDisplayAwake = root["keepDisplayAwake"] is JsonValue k && k.TryGetValue<bool>(out var awake) && awake;
-            log.Info("settings", $"loaded: vibescape {s.Vibescape}, audio {s.Audio}, keep display awake {s.KeepDisplayAwake}");
+            log.Info("settings", $"loaded: vibescape {s.Vibescape}, audio {s.Audio}, palette {Palette.At(s.PaletteIndex).Name}, keep display awake {s.KeepDisplayAwake}");
             return s;
         }
         catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
@@ -86,6 +95,7 @@ public sealed class Settings
             AudioChoice.Microphone => "microphone",
             _ => "loopback",
         };
+        _root["palette"] = Palette.At(PaletteIndex).Name;
         _root["keepDisplayAwake"] = KeepDisplayAwake;
         try
         {

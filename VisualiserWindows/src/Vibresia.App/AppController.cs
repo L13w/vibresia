@@ -34,7 +34,7 @@ internal sealed class AppController
     private readonly OpenEdge _listOpening = new();
     private VibescapeCatalog _catalog;
 
-    /// <summary>The palette in use; not remembered, as on the Mac.</summary>
+    /// <summary>The palette in use. Remembered when picked from the drop-down, unlike on the Mac (owner's choice).</summary>
     public int PaletteIndex { get; private set; }
 
     public ChromeActions Actions { get; }
@@ -108,6 +108,8 @@ internal sealed class AppController
         PaletteIndex = index;
         _host.Palette = Palette.At(index);
         _log.Info("palette", $"palette {Palette.At(index).Name}");
+        _settings.PaletteIndex = index;
+        _settings.Save(_log);
     }
 
     private void ToggleFullScreen()

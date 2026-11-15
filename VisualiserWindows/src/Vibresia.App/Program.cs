@@ -102,10 +102,10 @@ public static partial class Program
         });
         hostRef = host;
 
-        // The Mac starts on NEON every launch and doesn't remember the palette; --palette N picks one, as on the Mac.
-        var paletteIndex = 0;
+        // The last palette picked (the Mac starts on NEON every launch; the owner chose to remember it). --palette N picks one for this run.
+        var paletteIndex = settings.PaletteIndex;
         if (Array.IndexOf(args, "--palette") is var pi and >= 0 && pi + 1 < args.Length && int.TryParse(args[pi + 1], out var asked))
-            paletteIndex = asked >= 0 && asked < Palette.All.Count ? asked : 0;
+            paletteIndex = asked >= 0 && asked < Palette.All.Count ? asked : paletteIndex;
 #if WINDOWS
         using var windows = new WindowsSystem(log);
         if (settings.KeepDisplayAwake) windows.KeepDisplayAwake(true);

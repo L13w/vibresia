@@ -306,6 +306,29 @@ public sealed class SettingsTests : IDisposable
     }
 
     [Fact]
+    public void ThePaletteRoundTripsByNameAndStartsOnNeon()
+    {
+        using var log = NewLog();
+        var s = Settings.Load(PathName, log);
+        Assert.Equal(0, s.PaletteIndex);
+        s.PaletteIndex = 3;
+        s.Save(log);
+        Assert.Equal(Palette.All[3].Name, (string)JsonNode.Parse(File.ReadAllText(PathName))!["palette"]!);
+        Assert.Equal(3, Settings.Load(PathName, log).PaletteIndex);
+    }
+
+    [Theory]
+    [InlineData("\"PLAID\"")]
+    [InlineData("2")]
+    public void AnUnknownPaletteMeansNeon(string value)
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(PathName, $$"""{"version":1,"palette":{{value}}}""");
+        using var log = NewLog();
+        Assert.Equal(0, Settings.Load(PathName, log).PaletteIndex);
+    }
+
+    [Fact]
     public void UnknownKeysSurviveASave()
     {
         Directory.CreateDirectory(_dir);

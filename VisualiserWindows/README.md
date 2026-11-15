@@ -21,7 +21,7 @@ It opens in a window, as the Mac app does. The header across the top has the Mac
 
 Vibescapes are drawn at 1× (your display's size before Windows scaling) and stretched to the screen, as the Mac draws them, with the Mac's CRT overlay and beat flash on top; turning off Windows' *Animation effects* turns off the flash.
 
-The last vibescape and audio source, and whether to keep the display awake (off unless you turn it on), are remembered in `%APPDATA%\Vibresia\settings.json`. As on the Mac, the palette starts on NEON each time, and a microphone used last time isn't switched on again until you pick it. `--fullscreen` starts full screen; `--palette N` (0–4) starts on another palette.
+The last vibescape, audio source and palette, and whether to keep the display awake (off unless you turn it on), are remembered in `%APPDATA%\Vibresia\settings.json`. As on the Mac, a microphone used last time isn't switched on again until you pick it. `--fullscreen` starts full screen; `--palette N` (0–4) starts on another palette for that run.
 
 ## Your own vibescapes
 
@@ -30,7 +30,7 @@ Put vibescape `.json` files (the macOS app's format, so a file copied from a Mac
 Not yet the same as the Mac:
 
 - Missing: Auto Scan, The Band and Machine; song identification, genre and track position; MIDI input; the intro screen, credits and View All panel (coming next); the editor, sharing and update checks.
-- Different on Windows: a **Settings** drop-down stands in for the Mac's menu bar; the window keeps Windows' title bar; full screen is a borderless window one pixel taller than the monitor (an exactly-fitting one blanked a 4K screen when the pointer crossed to another display); keeping the display awake is an option the Mac doesn't have (off by default); a failed source is explained under the header rather than on an intro screen; with no speakers the demo tone runs silently.
+- Different on Windows: a **Settings** drop-down stands in for the Mac's menu bar; the window keeps Windows' title bar; full screen is a borderless window one pixel taller than the monitor (an exactly-fitting one blanked a 4K screen when the pointer crossed to another display); keeping the display awake is an option the Mac doesn't have (off by default); the palette is remembered between launches (the Mac starts on NEON each time); a failed source is explained under the header rather than on an intro screen; with no speakers the demo tone runs silently.
 - Port additions: ← / →, D, F12, and Esc to quit.
 - Custom vibescapes: a file with an empty `id` is skipped (the Mac loads it); the footer credit isn't a link.
 

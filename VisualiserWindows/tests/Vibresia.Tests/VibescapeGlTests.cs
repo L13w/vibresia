@@ -214,7 +214,7 @@ public sealed class VibescapeGlTests : IDisposable
             chrome.Notice("Line 3 needs a fix: %s %n %d\nsecond line", MessageSeverity.Error, 10);
             var state = new ChromeState();
             var inside = true;
-            var actions = new ChromeActions(_ => { }, _ => { }, _ => { }, () => { }, () => { }, () => { }, () => { }, () => { });
+            var actions = new ChromeActions();
             var bands = Enumerable.Range(0, FrameUniforms.BandCount).Select(i => (i % 7) / 7f).ToArray();
             var menus = new[] { ChromeMenu.Vibescape, ChromeMenu.Palette, ChromeMenu.Source, ChromeMenu.Settings, ChromeMenu.None };
             var frames = 0;
@@ -222,9 +222,12 @@ public sealed class VibescapeGlTests : IDisposable
             bool? controlTook = null, pictureTook = null, menuTookAnywhere = null, hiddenTook = null;
             host.Overlay += dt =>
             {
-                state.Advance(dt, () => inside, chrome.OpenMenu != ChromeMenu.None);
-                var view = new ChromeView(catalog.Entries, host.Current, 2, AudioChoice.Loopback, SourceState.Live,
-                    false, true, true, bands, 0.6f, "Can't hear anything: %s.", MessageSeverity.Error);
+                state.Advance(dt, () => inside, chrome.AnythingOpen);
+                var view = new ChromeView
+                {
+                    Catalog = catalog, Current = host.Current, PaletteIndex = 2, ChosenSource = AudioChoice.Loopback,
+                    SourceState = SourceState.Live, KeepDisplayAwake = true, Bands = bands, BeatStrength = 0.6f,
+                };
                 if (frames < menus.Length && menus[frames] != ChromeMenu.None) chrome.Open(menus[frames]);
                 chrome.Render((float)dt, view, state, actions);
                 var size = window.Size;
@@ -249,6 +252,73 @@ public sealed class VibescapeGlTests : IDisposable
             Assert.False(hiddenTook, "a hidden header takes no clicks");
             Assert.Equal(0f, state.Shown);
             Assert.Contains("interface fonts:", File.ReadAllText(log.FilePath));
+        }
+        finally
+        {
+            window.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// The intro, the credits and the View All panel draw without a GL error:
+    /// the intro takes every click while it is up, an open panel takes every
+    /// click, the panel's built-in pictures decode, and drawing a custom
+    /// vibescape's picture is how the panel finds one that needs a fix.
+    /// </summary>
+    [Fact]
+    public void TheIntroAndPanelsDrawAndTakeEveryClick()
+    {
+        var (window, gl, _) = GlWindow.Create(GlWindow.Options(visible: true, fullscreen: false));
+        try
+        {
+            using var log = new Log(_logDir);
+            var catalog = new VibescapeCatalog(
+            [
+                new CustomVibescape("mine", "Mine", "Ada", "vec3 render(vec2 p, float t){return vec3(p.x, 0.5, 1.0);}", true),
+                new CustomVibescape("broken", "Broken", "", "vec3 render(vec2 p, float t){return vec3(uBas);}", false),
+            ], [VibescapeId.Custom("mine"), VibescapeId.Custom("broken")]);
+            var host = new VibescapeHost(window, gl, log, catalog.Find(VibescapeCatalog.Default)!, catalog.Find(VibescapeCatalog.Default)!, (u, _) => TestUniforms.Music(u));
+            var input = Silk.NET.Input.InputWindowExtensions.CreateInput(window);
+            var chrome = new MacChrome(gl, window, input, host.Scale, log);
+            host.ReleaseOnClose(chrome);
+            var state = new ChromeState();
+            var frames = 0;
+            bool? introTook = null, creditsTook = null, panelTook = null, clearTook = null;
+            var glError = GLEnum.NoError;
+            host.Overlay += dt =>
+            {
+                var intro = frames < 30;
+                state.Advance(dt, () => true, chrome.AnythingOpen);
+                var view = new ChromeView
+                {
+                    Catalog = catalog, Current = host.Current, StartAtLogin = true,
+                    IntroShown = intro, IntroProblem = intro ? "Couldn't start system audio: %s device gone." : null,
+                };
+                if (frames == 40) chrome.Open(ChromePanel.Credits);
+                if (frames == 70) chrome.Open(ChromePanel.ViewAll);
+                chrome.Render((float)dt, view, state, new ChromeActions());
+                var centre = new System.Numerics.Vector2(window.Size.X / 2f, window.Size.Y / 2f);
+                if (frames == 20) introTook = chrome.TakesClick(centre);
+                if (frames == 60) creditsTook = chrome.TakesClick(new(4, 4));
+                if (frames == 150) panelTook = chrome.TakesClick(new(4, 4));
+                if (frames == 160)
+                {
+                    chrome.CloseMenu();
+                    glError = gl.GetError();
+                }
+                if (frames == 170) clearTook = chrome.TakesClick(centre);
+                if (++frames >= 171) window.Close();
+            };
+            window.Run();
+            Assert.True(introTook, "the intro covers the window and takes every click");
+            Assert.True(creditsTook, "the open credits take a click anywhere (one outside closes them)");
+            Assert.True(panelTook, "the View All panel is a sheet: it takes every click");
+            Assert.False(clearTook, "with nothing open and no intro, the picture gets its clicks");
+            Assert.Equal(GLEnum.NoError, glError);
+            var text = File.ReadAllText(log.FilePath);
+            Assert.Contains("custom:broken needs a fix", text);
+            Assert.DoesNotContain("custom:mine needs a fix", text);
+            Assert.DoesNotContain("no picture for", text);
         }
         finally
         {

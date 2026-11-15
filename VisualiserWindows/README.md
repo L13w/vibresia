@@ -8,31 +8,31 @@ The port runs the macOS app's own GLSL shaders, unchanged, through OpenGL 3.3, a
 
 Download the zip from the fork's releases, unzip it, and run `Vibresia.exe`. Windows SmartScreen will warn about an unsigned app: choose **More info → Run anyway**.
 
-It opens in a window, as the Mac app does. The header across the top has the Mac's drop-downs: the vibescape, the colour palette, and what to listen to (system audio, microphone or the demo tone, which plays aloud). A **Settings** drop-down holds what the Mac keeps in its menu bar: full screen, keeping the display awake, the CRT effect (a Windows addition), and the custom vibescapes and log folders. The header and the meter on the right slide away when the pointer leaves the window.
+It opens in a window, as the Mac app does. Until something is listening, the Mac's intro asks what to listen to (and says why, if a source stopped working). The header across the top has the Mac's drop-downs: the vibescape, the colour palette, and what to listen to (system audio, microphone or the demo tone, which plays aloud). A **Settings** drop-down holds what the Mac keeps in its menu bar: full screen, keeping the display awake, the CRT effect (a Windows addition), and the custom vibescapes and log folders. The vibescape drop-down ends with **VIEW ALL**, the Mac's panel of every vibescape: switch off the ones you don't want in the list, drag them into your own order, or click a picture to switch to it. The header and the meter on the right slide away when the pointer leaves the window. The **♥ from Minith Labs** button in the bottom-right corner opens the credits, with **Start at login** and **Float above other apps**.
 
 | Key | Does |
 |---|---|
-| 1 … 9, 0 | Pick one of the first ten vibescapes in the list, as on the Mac |
+| 1 … 9, 0, then - [ ] ; ' \ , . / ` and ! @ # $ % ^ & * ( ) | Pick a vibescape by its place in the list (switched-on ones only), as on the Mac; the drop-down shows each one's key |
 | F11 | Full screen / windowed |
 | ← / → | Previous / next vibescape |
 | D | Switch between this PC's sound and the demo tone |
-| Esc | Close an open drop-down; otherwise quit |
+| Esc | Close an open drop-down, the credits or the View All panel; otherwise quit |
 | F12 | Open the log folder (send `vibresia.log` when reporting a problem) |
 
 Vibescapes are drawn at 1× (your display's size before Windows scaling) and stretched to the screen, as the Mac draws them, with the Mac's CRT overlay and beat flash on top; turning off Windows' *Animation effects* turns off the flash.
 
-The last vibescape, audio source and palette, whether to keep the display awake (off unless you turn it on) and the CRT effect (on unless you turn it off), are remembered in `%APPDATA%\Vibresia\settings.json`. As on the Mac, a microphone used last time isn't switched on again until you pick it. `--fullscreen` starts full screen; `--palette N` (0–4) starts on another palette for that run.
+The last vibescape, audio source and palette, whether to keep the display awake (off unless you turn it on), the CRT effect (on unless you turn it off), the list's order and which vibescapes are switched off, and floating above other apps, are remembered in `%APPDATA%\Vibresia\settings.json`. As on the Mac, a microphone used last time isn't switched on again until you pick it. Start at login is Windows' own startup entry (you'll also see it in Task Manager's Startup apps); each time Vibresia opens it points that entry at the copy you opened, so a new build unzipped to a new folder takes over by itself. `--fullscreen` starts full screen; `--palette N` (0–4) starts on another palette for that run.
 
 ## Your own vibescapes
 
-Put vibescape `.json` files (the macOS app's format, so a file copied from a Mac works) in `%APPDATA%\Vibresia\Vibescapes\`. **Settings → Open Custom Vibescapes Folder** opens it. Opening the vibescape drop-down rescans the folder, so there is no need to restart. One that doesn't compile shows why (with the line in your code), and the previous vibescape keeps playing.
+Put vibescape `.json` files (the macOS app's format, so a file copied from a Mac works) in `%APPDATA%\Vibresia\Vibescapes\`. **Settings → Open Custom Vibescapes Folder** opens it. Opening the vibescape drop-down or the View All panel rescans the folder, so there is no need to restart. Switching one off in the panel is remembered in settings.json; your files are never changed. One that doesn't compile shows why (with the line in your code), and the previous vibescape keeps playing.
 
 Not yet the same as the Mac:
 
-- Missing: Auto Scan, The Band and Machine; song identification, genre and track position; MIDI input; the intro screen, credits and View All panel (coming next); the editor, sharing and update checks.
-- Different on Windows: a **Settings** drop-down stands in for the Mac's menu bar; the window keeps Windows' title bar; full screen is a borderless window one pixel taller than the monitor (an exactly-fitting one blanked a 4K screen when the pointer crossed to another display); keeping the display awake is an option the Mac doesn't have (off by default); the palette is remembered between launches (the Mac starts on NEON each time); **Settings → CRT Effect** turns off the scanlines and vignette for a brighter picture, like the Mac's exported videos (the Mac window always draws them); a failed source is explained under the header rather than on an intro screen; with no speakers the demo tone runs silently.
+- Missing: Auto Scan, The Band and Machine; song identification, genre and track position; MIDI input; the editor, sharing, the gallery and update checks; in the credits, the coffee button and the Proudly Shareware share link (left out by choice: this isn't an official build), Open with Music or Spotify, Identify by listening, analytics, and the privacy and terms links (they describe the Mac app).
+- Different on Windows: a **Settings** drop-down stands in for the Mac's menu bar; the window keeps Windows' title bar; full screen is a borderless window one pixel taller than the monitor (an exactly-fitting one blanked a 4K screen when the pointer crossed to another display); keeping the display awake is an option the Mac doesn't have (off by default); the palette is remembered between launches (the Mac starts on NEON each time); **Settings → CRT Effect** turns off the scanlines and vignette for a brighter picture, like the Mac's exported videos (the Mac window always draws them); the intro says why a source failed (the Mac's just comes back); the list's order and switches live in settings.json rather than in your vibescape files, and Kaleidoscope (not Tunnel, which this port doesn't have) is the one that can't be switched off; in the View All panel your own vibescapes can't be edited, copied or deleted (use the folder); with no speakers the demo tone runs silently.
 - Port additions: ← / →, D, F12, and Esc to quit.
-- Custom vibescapes: a file with an empty `id` is skipped (the Mac loads it); the footer credit isn't a link.
+- Custom vibescapes: a file with an empty `id` is skipped (the Mac loads it); the footer credit and the panel's author names aren't links.
 
 The pointer and keys reach the vibescapes as on the Mac.
 

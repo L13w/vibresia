@@ -1,3 +1,4 @@
+using Vibresia.Core.Ui;
 using Vibresia.Core;
 using Vibresia.Core.Audio;
 
@@ -431,35 +432,40 @@ public class RealFftTests
     }
 }
 
-public class AudioStatusMessageTests
+public class IntroScreenTests
 {
-    [Fact]
-    public void FailureIsAnErrorAndOffersTheDemoOnlyWhenNotAlreadyOnIt()
-    {
-        var (text, sev) = AudioStatusMessage.For(AudioStatus.Failed, "device gone", onDemo: false);
-        Assert.Equal(MessageSeverity.Error, sev);
-        Assert.Contains("device gone.", text);
-        Assert.Contains("press D", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("menu at the top right", text);
-        Assert.DoesNotContain("press D", AudioStatusMessage.For(AudioStatus.Failed, "x.", onDemo: true).Text!, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("..", AudioStatusMessage.For(AudioStatus.Failed, "x.", onDemo: true).Text!);
-    }
-
-    /// <summary>As on the Mac: silence and a running source say nothing; the header says which source is running.</summary>
+    /// <summary>As on the Mac: the intro is up whenever nothing is listening, and down while a source runs, sound or not.</summary>
     [Theory]
+    [InlineData(AudioStatus.None, true)]
+    [InlineData(AudioStatus.Failed, true)]
     [InlineData(AudioStatus.Playing, false)]
     [InlineData(AudioStatus.NothingPlaying, false)]
-    [InlineData(AudioStatus.NothingPlaying, true)]
-    public void SilenceAndPlayingSayNothing(AudioStatus status, bool onDemo) =>
-        Assert.Null(AudioStatusMessage.For(status, null, onDemo).Text);
+    public void ShowsOnlyWhenNothingIsListening(AudioStatus status, bool shows) =>
+        Assert.Equal(shows, IntroScreen.Shows(status));
 
     [Fact]
-    public void NoSourceAsksForOne()
+    public void AFailureSaysWhichSourceAndWhyWithOneFullStop()
     {
-        var (text, sev) = AudioStatusMessage.For(AudioStatus.None, null, onDemo: false);
-        Assert.Equal(MessageSeverity.Hint, sev);
-        Assert.Contains("menu at the top right", text);
+        Assert.Equal("Couldn't start the microphone: device gone.", IntroScreen.Problem(AudioStatus.Failed, AudioChoice.Microphone, "device gone."));
+        Assert.Equal("Couldn't start system audio: x.", IntroScreen.Problem(AudioStatus.Failed, AudioChoice.Loopback, "x"));
+        Assert.Equal("Couldn't start the demo tone.", IntroScreen.Problem(AudioStatus.Failed, AudioChoice.Demo, null));
     }
+
+    [Theory]
+    [InlineData(AudioStatus.None)]
+    [InlineData(AudioStatus.Playing)]
+    public void NoFailureNoProblem(AudioStatus status) =>
+        Assert.Null(IntroScreen.Problem(status, AudioChoice.Loopback, "stale message"));
+
+    [Fact]
+    public void OneButtonPerSourceInTheMacsOrder() =>
+        Assert.Equal(SourcePill.Choices, IntroScreen.Buttons.Select(b => b.Choice));
+
+    [Fact]
+    public void TheWordsStayInsideTheInterfaceFontsGlyphs() =>
+        Assert.All(new[] { IntroScreen.Title, IntroScreen.Subtitle, IntroScreen.Footnote }
+                .Concat(IntroScreen.Buttons.SelectMany(b => new[] { b.Label, b.Detail })),
+            text => Assert.All(text, ch => Assert.InRange(ch, ' ', '\u017F')));
 }
 
 public class SourceToggleTests

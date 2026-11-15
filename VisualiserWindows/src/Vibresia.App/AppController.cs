@@ -8,12 +8,23 @@ using Vibresia.Render;
 
 namespace Vibresia.App;
 
+/// <summary>What the controller asks of the operating system; off Windows each does nothing.</summary>
+/// <param name="KeepAwake">Asks Windows to keep the display awake, or stops asking.</param>
+/// <param name="ReadStartAtLogin">Whether Vibresia opens when the user signs in.</param>
+/// <param name="SetStartAtLogin">Makes it open at sign-in, or stops it.</param>
+internal sealed record SystemHooks(Action<bool> KeepAwake, Func<bool> ReadStartAtLogin, Action<bool> SetStartAtLogin)
+{
+    public static SystemHooks None { get; } = new(_ => { }, () => false, _ => { });
+}
+
 /// <summary>
-/// What the user can ask for, from the header's drop-downs or the keys, and
-/// what the chrome shows each frame: switching vibescape, palette and audio
-/// source, full screen and keep-awake, opening folders, and remembering the
-/// choices that are remembered. Kept out of Program.Run, which only builds
-/// the pieces and wires their events.
+/// What the user can ask for, from the header's drop-downs, the intro, the
+/// credits, the View All panel or the keys, and what the chrome shows each
+/// frame: switching vibescape, palette and audio source, arranging and
+/// switching vibescapes, full screen, keep-awake, start at login and floating
+/// above other windows, opening folders and the credits' web pages, and
+/// remembering the choices that are remembered. Kept out of Program.Run,
+/// which only builds the pieces and wires their events.
 /// </summary>
 internal sealed class AppController
 {
@@ -29,52 +40,72 @@ internal sealed class AppController
     private readonly VibescapeHost _host;
     private readonly MacChrome _chrome;
     private readonly WindowMode _windowMode;
-    private readonly Action<bool> _keepAwake;
+    private readonly SystemHooks _system;
     private readonly SourceSelection _source;
-    private readonly OpenEdge _listOpening = new();
-    private VibescapeCatalog _catalog;
+    private readonly ChromeOpenings _openings = new();
+    private readonly VibescapeList _list;
+    private bool _startAtLogin;
+
+    private VibescapeCatalog Catalog => _list.Catalog;
 
     /// <summary>The palette in use. Remembered when picked from the drop-down, unlike on the Mac (owner's choice).</summary>
     public int PaletteIndex { get; private set; }
 
     public ChromeActions Actions { get; }
 
-    /// <param name="keepAwake">Asks Windows to keep the display awake, or stops asking.</param>
-    public AppController(Log log, IWindow window, Settings settings, string customFolder, VibescapeCatalog catalog,
+    public AppController(Log log, IWindow window, Settings settings, string customFolder, IReadOnlyList<CustomVibescape> customs,
         AudioSources sources, AudioPipeline audio, VibescapeHost host, MacChrome chrome, WindowMode windowMode,
-        int paletteIndex, Action<bool> keepAwake)
+        int paletteIndex, SystemHooks system)
     {
         _log = log;
         _window = window;
         _settings = settings;
         _customFolder = customFolder;
-        _catalog = catalog;
+        _list = new VibescapeList(settings, customs);
         _sources = sources;
         _audio = audio;
         _host = host;
         _chrome = chrome;
         _windowMode = windowMode;
-        _keepAwake = keepAwake;
+        _system = system;
         _source = new SourceSelection(settings, sources.HasLoopback);
         PaletteIndex = paletteIndex;
         host.Palette = Palette.At(paletteIndex);
         host.CrtEffect = settings.CrtEffect;
-        Actions = new ChromeActions(
-            PickVibescape: Switch,
-            PickPalette: PickPalette,
-            PickSource: c =>
+        ApplyFloatOnTop();
+        Actions = new ChromeActions
+        {
+            PickVibescape = Switch,
+            PickPalette = PickPalette,
+            PickSource = c =>
             {
                 StartSource(_source.Pick(c));
                 Remember();
             },
-            ToggleFullScreen: ToggleFullScreen,
-            ToggleKeepDisplayAwake: ToggleKeepDisplayAwake,
-            ToggleCrtEffect: ToggleCrtEffect,
-            OpenCustomFolder: () => OpenFolder(customFolder, log),
-            OpenLogFolder: () => OpenFolder(log.Directory, log));
+            ToggleFullScreen = ToggleFullScreen,
+            ToggleKeepDisplayAwake = ToggleKeepDisplayAwake,
+            ToggleCrtEffect = ToggleCrtEffect,
+            ToggleStartAtLogin = () =>
+            {
+                _system.SetStartAtLogin(!_startAtLogin);
+                _startAtLogin = _system.ReadStartAtLogin();
+            },
+            ToggleFloatOnTop = () =>
+            {
+                _settings.FloatOnTop = !_settings.FloatOnTop;
+                ApplyFloatOnTop();
+                _settings.Save(_log);
+            },
+            OpenCustomFolder = () => OpenFolder(customFolder, log),
+            OpenLogFolder = () => OpenFolder(log.Directory, log),
+            OpenWebsite = OpenWebsite,
+            MoveVibescape = (id, index) => Arranged(_list.Move(id, index)),
+            SwitchVibescape = (id, on) => Arranged(_list.Switch(id, on)),
+            ResetOrder = () => Arranged(_list.ResetOrder()),
+        };
     }
 
-    /// <summary>Starts the remembered source (<see cref="SourceSelection.AtLaunch"/>).</summary>
+    /// <summary>Starts the remembered source (<see cref="SourceSelection.AtLaunch"/>); with none, the intro asks.</summary>
     public void StartAtLaunch()
     {
         if (_source.AtLaunch() is { } choice) StartSource(choice);
@@ -99,10 +130,18 @@ internal sealed class AppController
 
     private void Switch(VibescapeEntry entry)
     {
+        Arranged(_list.SwitchOnToPick(entry.Id));
         if (_host.Show(entry) is { } problem)
             _chrome.Notice($"{entry.Title} didn't load.\n{problem.ForScreen()}", MessageSeverity.Error, ErrorSeconds);
         else
             Remember();
+    }
+
+    private void Arranged(bool changed)
+    {
+        if (!changed) return;
+        _settings.Save(_log);
+        _log.Info("vibescape", $"list: {(_settings.Order is null ? "shipped order" : "own order")}, {Catalog.Entries.Count} of {Catalog.All.Count} switched on");
     }
 
     private void PickPalette(int index)
@@ -117,13 +156,23 @@ internal sealed class AppController
     private void ToggleFullScreen()
     {
         _windowMode.Toggle();
+        ApplyFloatOnTop();
         _log.Info("window", _windowMode.FullScreen ? $"full screen on {MonitorArea.Containing(_window)?.Size}" : $"windowed at {_window.Size}");
+    }
+
+    /// <summary>Float above other apps, suspended in full screen (as the Mac suspends it while full screen).</summary>
+    private void ApplyFloatOnTop()
+    {
+        var top = WindowFloat.Wanted(_settings.FloatOnTop, _windowMode.FullScreen);
+        if (_window.TopMost == top) return;
+        _window.TopMost = top;
+        _log.Info("window", top ? "floating above other windows" : "not floating above other windows");
     }
 
     private void ToggleKeepDisplayAwake()
     {
         _settings.KeepDisplayAwake = !_settings.KeepDisplayAwake;
-        _keepAwake(_settings.KeepDisplayAwake);
+        _system.KeepAwake(_settings.KeepDisplayAwake);
         _settings.Save(_log);
     }
 
@@ -144,9 +193,9 @@ internal sealed class AppController
             case AppCommand.CloseMenu: _chrome.CloseMenu(); break;
             case AppCommand.OpenLogFolder: OpenFolder(_log.Directory, _log); break;
             case AppCommand.ToggleFullScreen: ToggleFullScreen(); break;
-            case AppCommand.Next: Switch(_catalog.Step(_host.Current.Id, 1)); break;
-            case AppCommand.Previous: Switch(_catalog.Step(_host.Current.Id, -1)); break;
-            case AppCommand.Pick when _catalog.ForShortcut(shortcut) is { } picked: Switch(picked); break;
+            case AppCommand.Next: Switch(Catalog.Step(_host.Current.Id, 1)); break;
+            case AppCommand.Previous: Switch(Catalog.Step(_host.Current.Id, -1)); break;
+            case AppCommand.Pick when Catalog.ForShortcut(shortcut) is { } picked: Switch(picked); break;
             case AppCommand.ToggleDemo:
                 StartSource(_source.ToggleDemo());
                 Remember();
@@ -156,20 +205,49 @@ internal sealed class AppController
 
     /// <summary>What the chrome shows this frame.</summary>
     /// <param name="u">The frame's uniforms, for the meter.</param>
-    public ChromeView View(FrameUniforms u)
+    public ChromeView View(FrameUniforms u) => new()
     {
-        var (text, severity) = AudioStatusMessage.For(_audio.Status, _audio.FailureMessage, onDemo: _source.Chosen == AudioChoice.Demo);
-        return new ChromeView(_catalog.Entries, _host.Current, PaletteIndex,
-            _source.Chosen, SourcePill.State(_audio.Status, _sources.ChoiceOf(_audio.Source)),
-            _windowMode.FullScreen, _settings.KeepDisplayAwake, _settings.CrtEffect,
-            u.Bands, u.BeatStrength, text, severity);
-    }
+        Catalog = Catalog,
+        Current = _host.Current,
+        PaletteIndex = PaletteIndex,
+        ChosenSource = _source.Chosen,
+        SourceState = SourcePill.State(_audio.Status, _sources.ChoiceOf(_audio.Source)),
+        FullScreen = _windowMode.FullScreen,
+        KeepDisplayAwake = _settings.KeepDisplayAwake,
+        CrtEffect = _settings.CrtEffect,
+        StartAtLogin = _startAtLogin,
+        FloatOnTop = _settings.FloatOnTop,
+        Bands = u.Bands,
+        BeatStrength = u.BeatStrength,
+        IntroShown = IntroScreen.Shows(_audio.Status),
+        IntroProblem = IntroScreen.Problem(_audio.Status, _source.Chosen, _audio.FailureMessage),
+    };
 
-    /// <summary>After the chrome has drawn: rescans the custom folder as the vibescape list opens, so a file copied in shows up without a restart.</summary>
+    /// <summary>
+    /// After the chrome has drawn: rescans the custom folder as the vibescape
+    /// list or the View All panel opens, so a file copied in shows up without
+    /// a restart, and reads Start at login back from Windows as the credits open.
+    /// </summary>
     public void AfterRender()
     {
-        if (_listOpening.Update(_chrome.OpenMenu == ChromeMenu.Vibescape))
-            _catalog = new VibescapeCatalog(CustomVibescapeLoader.LoadAll(_customFolder, _log));
+        var (rescan, readStartAtLogin) = _openings.Update(_chrome.OpenMenu == ChromeMenu.Vibescape,
+            _chrome.OpenPanel == ChromePanel.ViewAll, _chrome.OpenPanel == ChromePanel.Credits);
+        if (rescan) _list.Rescan(CustomVibescapeLoader.LoadAll(_customFolder, _log));
+        if (readStartAtLogin) _startAtLogin = _system.ReadStartAtLogin();
+    }
+
+    /// <summary>Opens one of the credits' own web addresses; nothing else is ever handed to the browser.</summary>
+    private void OpenWebsite(string url)
+    {
+        if (!CreditsLinks.IsAllowed(url) || !OperatingSystem.IsWindows()) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception e) when (e is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            _log.Warn("ui", $"couldn't open {url}: {e.Message}");
+        }
     }
 
     private static void OpenFolder(string folder, Log log)

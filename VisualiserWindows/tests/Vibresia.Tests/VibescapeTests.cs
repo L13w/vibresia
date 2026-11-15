@@ -54,12 +54,18 @@ public class CatalogTests
         Assert.Equal("MINE NAME", c.Entries[^1].Title);
     }
 
+    /// <summary>
+    /// As on the Mac: a custom vibescape its own file switches off is in the
+    /// View All panel, switched off, and missing only from the drop-down.
+    /// </summary>
     [Fact]
-    public void DisabledCustomsAreNotListed()
+    public void ACustomItsFileSwitchesOffIsListedSwitchedOff()
     {
         var c = new VibescapeCatalog([Custom("off", enabled: false), Custom("on")]);
-        Assert.Null(c.Find(VibescapeId.Custom("off")));
-        Assert.NotNull(c.Find(VibescapeId.Custom("on")));
+        Assert.NotNull(c.Find(VibescapeId.Custom("off")));
+        Assert.False(c.IsOn(VibescapeId.Custom("off")));
+        Assert.DoesNotContain(c.Entries, e => e.Id == VibescapeId.Custom("off"));
+        Assert.Contains(c.Entries, e => e.Id == VibescapeId.Custom("on"));
     }
 
     [Fact]
@@ -72,12 +78,72 @@ public class CatalogTests
     }
 
     [Fact]
-    public void NumberKeysPickTheFirstTenAsOnTheMac()
+    public void TheKeysFollowTheSwitchedOnListPastTheNumberRowAsOnTheMac()
     {
-        var c = new VibescapeCatalog([]);
+        var customs = Enumerable.Range(0, 20).Select(i => Custom($"c{i:00}")).ToArray();
+        var c = new VibescapeCatalog(customs, switches: new Dictionary<VibescapeId, bool> { [VibescapeId.Builtin("ribbons")] = false });
         Assert.Equal(c.Entries[0].Id, c.ForShortcut('1')!.Id);
+        Assert.Equal(VibescapeId.Builtin("vortex"), c.ForShortcut('1')!.Id);   // ribbons is off, so vortex is first
         Assert.Equal(c.Entries[9].Id, c.ForShortcut('0')!.Id);
+        Assert.Equal(c.Entries[10].Id, c.ForShortcut('-')!.Id);
+        Assert.Equal(c.Entries[20].Id, c.ForShortcut('!')!.Id);
+        Assert.Equal('[', c.ShortcutFor(c.Entries[11].Id));
+        Assert.Null(c.ShortcutFor(VibescapeId.Builtin("ribbons")));            // off: no key
+        Assert.Null(c.ShortcutFor(c.Entries[VibescapeCatalog.ShortcutKeys.Length].Id)); // past the end of the keys
         Assert.Null(c.ForShortcut('x'));
+        Assert.Equal("1234567890-[];'\\,./`!@#$%^&*()", VibescapeCatalog.ShortcutKeys);
+    }
+
+    [Fact]
+    public void TheUsersOrderComesFirstThenAnythingItDoesntName()
+    {
+        var order = new[] { VibescapeId.Custom("mine"), VibescapeId.Builtin("warp"), VibescapeId.Custom("gone"), VibescapeId.Builtin("warp") };
+        var c = new VibescapeCatalog([Custom("mine")], order);
+        Assert.Equal(VibescapeId.Custom("mine"), c.All[0].Entry.Id);
+        Assert.Equal(VibescapeId.Builtin("warp"), c.All[1].Entry.Id);
+        Assert.Equal(VibescapeId.Builtin("ribbons"), c.All[2].Entry.Id);   // then the shipped order, skipping what was named
+        Assert.Equal(c.All.Count, c.All.Select(l => l.Entry.Id).Distinct().Count());
+        Assert.True(c.HasCustomOrder);
+        Assert.False(new VibescapeCatalog([Custom("mine")]).HasCustomOrder);
+    }
+
+    [Fact]
+    public void MovingAVibescapeMovesTheWholeListAndForgetsTheShippedOrder()
+    {
+        var c = new VibescapeCatalog([Custom("mine")]);
+        var moved = c.OrderAfterMove(VibescapeId.Custom("mine"), 0)!;
+        Assert.Equal(VibescapeId.Custom("mine"), moved[0]);
+        Assert.Equal(c.All.Count, moved.Count);
+        var back = new VibescapeCatalog([Custom("mine")], moved).OrderAfterMove(VibescapeId.Custom("mine"), 999);
+        Assert.Null(back);                                                  // back to how it ships: nothing stored
+        Assert.Null(c.CurrentOrder());
+    }
+
+    [Fact]
+    public void ASwitchedOffVibescapeStaysFindableButLeavesTheListAndTheSteps()
+    {
+        var off = VibescapeId.Builtin("vortex");
+        var c = new VibescapeCatalog([], switches: new Dictionary<VibescapeId, bool> { [off] = false });
+        Assert.NotNull(c.Find(off));                                        // still drawable if it is on screen
+        Assert.DoesNotContain(c.Entries, e => e.Id == off);
+        Assert.Equal(VibescapeId.Builtin("silk"), c.Step(VibescapeId.Builtin("ribbons"), 1).Id);
+    }
+
+    [Fact]
+    public void TheDefaultCantBeSwitchedOffAndSwitchesOnlyRecordRealChoices()
+    {
+        var c = new VibescapeCatalog([Custom("filedOff", enabled: false)]);
+        Assert.True(new VibescapeCatalog([], switches: new Dictionary<VibescapeId, bool> { [VibescapeCatalog.Default] = false }).IsOn(VibescapeCatalog.Default));
+        Assert.Empty(c.SwitchesWith(null, VibescapeCatalog.Default, false));
+
+        var warpOff = c.SwitchesWith(null, VibescapeId.Builtin("warp"), false);
+        Assert.False(warpOff[VibescapeId.Builtin("warp")]);
+        Assert.Empty(c.SwitchesWith(warpOff, VibescapeId.Builtin("warp"), true));   // back to its default: forgotten
+
+        var on = c.SwitchesWith(null, VibescapeId.Custom("filedOff"), true);
+        Assert.True(on[VibescapeId.Custom("filedOff")]);                 // overrides the file without writing it
+        Assert.True(new VibescapeCatalog([Custom("filedOff", enabled: false)], switches: on).IsOn(VibescapeId.Custom("filedOff")));
+        Assert.Empty(c.SwitchesWith(on, VibescapeId.Custom("filedOff"), false));
     }
 
     [Fact]
@@ -350,6 +416,40 @@ public sealed class SettingsTests : IDisposable
         File.WriteAllText(PathName, $$"""{"version":1,"crtEffect":{{value}}}""");
         using var log = NewLog();
         Assert.True(Settings.Load(PathName, log).CrtEffect);
+    }
+
+    [Fact]
+    public void TheListsOrderSwitchesAndFloatingRoundTrip()
+    {
+        using var log = NewLog();
+        var s = Settings.Load(PathName, log);
+        Assert.Null(s.Order);
+        Assert.Empty(s.Switches);
+        Assert.False(s.FloatOnTop);
+        s.Order = [VibescapeId.Custom("mine"), VibescapeId.Builtin("warp")];
+        s.Switches = new Dictionary<VibescapeId, bool> { [VibescapeId.Builtin("nyan")] = false, [VibescapeId.Custom("x")] = true };
+        s.FloatOnTop = true;
+        s.Save(log);
+        var back = Settings.Load(PathName, log);
+        Assert.Equal(s.Order, back.Order);
+        Assert.False(back.Switches[VibescapeId.Builtin("nyan")]);
+        Assert.True(back.Switches[VibescapeId.Custom("x")]);
+        Assert.True(back.FloatOnTop);
+        back.Order = null;
+        back.Save(log);
+        Assert.Null(JsonNode.Parse(File.ReadAllText(PathName))!["order"]);   // the shipped order isn't pinned
+    }
+
+    [Fact]
+    public void BadOrderAndSwitchEntriesAreSkipped()
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(PathName, """{"version":1,"order":["builtin:warp",7,"nonsense",null],"switches":{"builtin:nyan":false,"junk":false,"builtin:warp":"no"},"floatOnTop":"yes"}""");
+        using var log = NewLog();
+        var s = Settings.Load(PathName, log);
+        Assert.Equal([VibescapeId.Builtin("warp")], s.Order);
+        Assert.Equal(new Dictionary<VibescapeId, bool> { [VibescapeId.Builtin("nyan")] = false }, s.Switches);
+        Assert.False(s.FloatOnTop);
     }
 
     [Fact]

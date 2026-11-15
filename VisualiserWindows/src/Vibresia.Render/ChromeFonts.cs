@@ -25,7 +25,18 @@ internal sealed class ChromeFonts
         (Face.SansSemibold, 11),  // list rows
         (Face.Mono, 9),           // list subtitles
         (Face.MonoBold, 14),      // the footer's vibescape name
-        (Face.Sans, 13),          // messages
+        (Face.Sans, 13),          // a vibescape's compile error
+        (Face.SansBold, 48),      // the intro's title
+        (Face.Sans, 15),          // the intro's subtitle
+        (Face.SansSemibold, 14),  // the intro's buttons
+        (Face.Sans, 12),          // why the intro came back
+        (Face.Sans, 11),          // the intro's footnote, the credits' paragraph, the panel's subtitle
+        (Face.SansBold, 13),      // the credits' VIBRESIA
+        (Face.SansSemibold, 12),  // "Proudly Shareware", Reset Order
+        (Face.SansSemibold, 9),   // STARTUP, WINDOW, "Needs a fix"
+        (Face.Sans, 9),           // switch details, a card's author
+        (Face.SansSemibold, 17),  // the panel's title
+        (Face.Sans, 10),          // the panel's footer
     ];
 
     // Basic Latin, Latin-1 and Latin Extended-A (custom vibescape names), and the ellipsis for truncation.

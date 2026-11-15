@@ -10,24 +10,6 @@ using Vibresia.Core.Vibescapes;
 
 namespace Vibresia.Render;
 
-/// <summary>Which header drop-down is open; only one at a time, as on the Mac.</summary>
-public enum ChromeMenu { None, Vibescape, Palette, Source, Settings }
-
-/// <summary>What the chrome shows this frame.</summary>
-/// <param name="Status">A line about audio (a failed source, or none chosen), or null.</param>
-public sealed record ChromeView(
-    IReadOnlyList<VibescapeEntry> Vibescapes, VibescapeEntry Current,
-    int PaletteIndex,
-    AudioChoice ChosenSource, SourceState SourceState,
-    bool FullScreen, bool KeepDisplayAwake, bool CrtEffect,
-    float[] Bands, float BeatStrength,
-    string? Status, MessageSeverity StatusSeverity);
-
-/// <summary>Where the chrome's choices go.</summary>
-public sealed record ChromeActions(
-    Action<VibescapeEntry> PickVibescape, Action<int> PickPalette, Action<AudioChoice> PickSource,
-    Action ToggleFullScreen, Action ToggleKeepDisplayAwake, Action ToggleCrtEffect, Action OpenCustomFolder, Action OpenLogFolder);
-
 /// <summary>
 /// The Mac's interface over the vibescape (VisualiserMac UI/ContentView,
 /// HUDView, DropdownMenu, MeterView, FooterView), measured in the Mac's
@@ -35,12 +17,13 @@ public sealed record ChromeActions(
 /// and the vibescape, palette and source drop-downs (plus a settings
 /// drop-down standing in for the Mac's menu bar), the meter at the right
 /// edge, both of which slide away when the pointer leaves the window, and
-/// the footer naming the vibescape, which stays. Messages the Mac would show
-/// on its intro screen (a failed source) sit under the header until the
-/// intro is ported. Everything is drawn on ImGui's draw list with the chrome's
-/// own hit-testing, so the layout follows the Swift views rather than ImGui's widgets.
+/// the footer naming the vibescape and the credits button, which stay; the
+/// intro while nothing is listening; the credits popover and the View All
+/// panel. Everything is drawn on ImGui's draw list with the chrome's own
+/// hit-testing, so the layout follows the Swift views rather than ImGui's
+/// widgets. A vibescape's compile error shows under the header.
 /// </summary>
-public sealed class MacChrome : IDisposable
+public sealed partial class MacChrome : IDisposable
 {
     // The Mac's colours (HUDView, VibescapePicker, MeterView).
     private static readonly Vector4 Magenta = new(1f, 0.17f, 0.84f, 1f);
@@ -62,7 +45,15 @@ public sealed class MacChrome : IDisposable
     private double _noticeLeft;
     private float _s = 1;
 
+    private readonly Tween _introFade = new(0.4, Easing.Out, 1);
+    private readonly Tween _panelFade = new(0.2, Easing.Out);
+
     public ChromeMenu OpenMenu { get; private set; }
+
+    public ChromePanel OpenPanel { get; private set; }
+
+    /// <summary>A drop-down, the credits or the View All panel is open: Esc closes it, and the chrome stays up.</summary>
+    public bool AnythingOpen => OpenMenu != ChromeMenu.None || OpenPanel != ChromePanel.None;
 
     public MacChrome(GL gl, IWindow window, IInputContext input, DisplayScale scale, Log? log = null)
     {
@@ -89,18 +80,38 @@ public sealed class MacChrome : IDisposable
         _noticeLeft = seconds;
     }
 
-    public void CloseMenu() => OpenMenu = ChromeMenu.None;
+    /// <summary>Closes whatever is open: a drop-down, the credits or the View All panel.</summary>
+    public void CloseMenu()
+    {
+        OpenMenu = ChromeMenu.None;
+        OpenPanel = ChromePanel.None;
+        _drag = null;
+    }
 
-    /// <summary>Opens a drop-down as clicking its pill does (it shows on the next frame the header is drawn).</summary>
-    public void Open(ChromeMenu menu) => OpenMenu = menu;
+    /// <summary>Opens a drop-down as clicking its pill does (it shows on the next frame the header is drawn); an open panel closes.</summary>
+    public void Open(ChromeMenu menu)
+    {
+        OpenPanel = ChromePanel.None;
+        OpenMenu = menu;
+    }
+
+    /// <summary>Opens the credits or the View All panel, as clicking the credits button or VIEW ALL does.</summary>
+    public void Open(ChromePanel panel)
+    {
+        OpenMenu = ChromeMenu.None;
+        OpenPanel = panel;
+        _panelFade.Snap(0);
+        _scroll = 0;
+    }
 
     /// <summary>
     /// Whether a click at <paramref name="pointer"/> (window pixels) belongs
-    /// to the interface rather than the vibescape: on a control, or anywhere
-    /// while a drop-down is open (the Mac's click-away catcher takes it).
+    /// to the interface rather than the vibescape: on a control, anywhere
+    /// while something is open (the Mac's click-away catcher takes it), or
+    /// anywhere while the intro covers the window.
     /// </summary>
     public bool TakesClick(Vector2 pointer) =>
-        OpenMenu != ChromeMenu.None || _controls.Exists(r => Inside(pointer, r.Min, r.Max));
+        AnythingOpen || _introUp || _controls.Exists(r => Inside(pointer, r.Min, r.Max));
 
     /// <summary>Draws the chrome. Call after the vibescape, every frame.</summary>
     public void Render(float dt, ChromeView view, ChromeState chrome, ChromeActions actions)
@@ -113,27 +124,54 @@ public sealed class MacChrome : IDisposable
             _imgui = CreateController();
             _log?.Info("ui", $"display scaling now {_scale.Value * 100:F0}%; interface fonts rebuilt");
         }
+        PreparePanel(view);
         _imgui.Update(dt);
         _s = _fonts.Scale;
         var io = ImGui.GetIO();
         var frame = new Frame(ImGui.GetForegroundDrawList(), io.DisplaySize, io.MousePos, ImGui.IsMouseClicked(ImGuiMouseButton.Left));
         _controls.Clear();
+        _hover = false;
+
+        // While the intro is up, everything else fades out and takes no clicks (ContentView: opacity 0, no hit-testing).
+        _introUp = view.IntroShown;
+        if (_introUp) CloseMenu();
+        _introFade.Target(_introUp ? 1 : 0);
+        _introFade.Advance(dt);
+        var ui = 1 - (float)_introFade.Value;
+        _panelFade.Target(OpenPanel == ChromePanel.None ? 0 : 1);
+        _panelFade.Advance(dt);
 
         var tier = Layout.ForWidth(frame.Size.X / _s);
-        var interactive = chrome.Visible;
+        // An open panel is above everything; what is under it takes no clicks (a click outside the credits closes them).
+        var blocked = OpenPanel != ChromePanel.None;
+        var interactive = chrome.Visible && !_introUp && !blocked;
         if (!tier.ShowsPills() || !interactive) OpenMenu = ChromeMenu.None;
         _menuFade.Target(OpenMenu == ChromeMenu.None ? 0 : 1);
         _menuFade.Advance(dt);
-
-        (Vector2 Min, Vector2 Max, Vector4 Tint)? anchor = null;
-        if (chrome.Shown > 0.001f) anchor = DrawHeader(ref frame, view, tier, chrome.Shown, interactive);
-        if (chrome.Shown > 0.001f) DrawMeter(frame, view, chrome.Shown);
-        DrawFooter(frame, view);
         _noticeLeft -= dt;
-        DrawMessages(frame, view);
-        if (OpenMenu != ChromeMenu.None && anchor is { } a) DrawMenu(ref frame, view, actions, a.Min, a.Max, a.Tint);
+
+        var style = ImGui.GetStyle();
+        (Vector2 Min, Vector2 Max, Vector4 Tint)? anchor = null;
+        if (ui > 0.001f)
+        {
+            // ImGui multiplies every colour by the style's alpha, which fades the whole interface at once.
+            style.Alpha = ui;
+            if (chrome.Shown > 0.001f) anchor = DrawHeader(ref frame, view, tier, chrome.Shown, interactive);
+            if (chrome.Shown > 0.001f) DrawMeter(frame, view, chrome.Shown);
+            DrawFooter(frame, view);
+            DrawCreditsButton(ref frame, !_introUp && !blocked);
+            DrawNotice(frame);
+            if (OpenMenu != ChromeMenu.None && anchor is { } a) DrawMenu(ref frame, view, actions, a.Min, a.Max, a.Tint);
+            style.Alpha = 1;
+        }
+        if (_introFade.Value > 0.001f) DrawIntro(ref frame, view, actions, (float)_introFade.Value);
+        if (OpenPanel == ChromePanel.Credits) DrawCredits(ref frame, view, actions);
+        if (OpenPanel == ChromePanel.ViewAll) DrawViewAll(ref frame, view, actions, dt);
 
         if (frame.Click && !frame.ClickTaken && OpenMenu != ChromeMenu.None) OpenMenu = ChromeMenu.None; // click away
+        if (frame.Click && !frame.ClickTaken && OpenPanel == ChromePanel.Credits) OpenPanel = ChromePanel.None;
+        // A pointing hand over anything that does something on a click, as the Mac's buttons show.
+        ImGui.SetMouseCursor(_hover ? ImGuiMouseCursor.Hand : ImGuiMouseCursor.Arrow);
         _imgui.Render();
     }
 
@@ -169,8 +207,7 @@ public sealed class MacChrome : IDisposable
 
         if (!tier.ShowsPills()) return null;
         var current = v.Current;
-        var shortcut = IndexOf(v.Vibescapes, current) is var ci and >= 0 && ci < VibescapeCatalog.ShortcutKeys.Length
-            ? VibescapeCatalog.ShortcutKeys[ci].ToString() : "";
+        var shortcut = v.Catalog.ShortcutFor(current.Id)?.ToString() ?? "";
         var palette = Palette.At(v.PaletteIndex);
         Pill[] pills =
         [
@@ -305,12 +342,16 @@ public sealed class MacChrome : IDisposable
 
     // ---- drop-down lists (DropdownMenu) ----
 
+    private const string ViewAllGlyph = "≡";
+
     private sealed record Row(string Title, Action Pick, bool Selected, string? Subtitle = null, string? Glyph = null, Palette? Swatch = null);
 
     private IEnumerable<Row> RowsFor(ChromeView v, ChromeActions a) => OpenMenu switch
     {
-        ChromeMenu.Vibescape => v.Vibescapes.Select((e, i) => new Row(e.Title, () => a.PickVibescape(e), e.Id == v.Current.Id,
-            Glyph: i < VibescapeCatalog.ShortcutKeys.Length ? VibescapeCatalog.ShortcutKeys[i].ToString() : "")),
+        // The switched-on vibescapes with their keys, then VIEW ALL (VibescapePicker; its "Vibe your own" row is the editor, out of scope).
+        ChromeMenu.Vibescape => v.Catalog.Entries.Select(e => new Row(e.Title, () => a.PickVibescape(e), e.Id == v.Current.Id,
+                Glyph: v.Catalog.ShortcutFor(e.Id)?.ToString() ?? ""))
+            .Append(new Row("VIEW ALL", () => Open(ChromePanel.ViewAll), false, Glyph: ViewAllGlyph)),
         ChromeMenu.Palette => Palette.All.Select((p, i) => new Row(p.Name, () => a.PickPalette(i), i == v.PaletteIndex, Swatch: p)),
         ChromeMenu.Source => SourcePill.Choices.Select(c => new Row(SourcePill.MenuTitle(c), () => a.PickSource(c), c == v.ChosenSource, SourcePill.Subtitle(c))),
         ChromeMenu.Settings =>
@@ -363,6 +404,13 @@ public sealed class MacChrome : IDisposable
             var x = rMin.X + 12 * s;
             var titleTop = y + (r.Subtitle is null ? 5 : 6) * s;
             if (r.Swatch is { } sw) DrawSwatch(d, new Vector2(x, y + rh / 2 - 6 * s), sw, alpha);
+            else if (r.Glyph == ViewAllGlyph)
+            {
+                // ≡ isn't in the interface fonts: three short lines, as the settings pill draws its own.
+                var cy = titleTop + 11 * s / 2 + 1 * s;
+                for (var i = -1; i <= 1; i++)
+                    d.AddLine(new Vector2(x, cy + i * 3 * s), new Vector2(x + 8 * s, cy + i * 3 * s), Colour(0.45f, 0.45f, 0.45f, alpha), 1.2f * s);
+            }
             else if (r.Glyph is { } g)
                 DrawText(d, Face.Mono, 11, new Vector2(x, titleTop), g, r.Selected ? Colour(tint, alpha) : Colour(0.45f, 0.45f, 0.45f, alpha));
             if (hasLead) x += (16 + 10) * s;
@@ -444,124 +492,33 @@ public sealed class MacChrome : IDisposable
         return author.Length == 0 || author.Equals(VibescapeCatalog.BuiltinAuthor, StringComparison.OrdinalIgnoreCase) ? null : author;
     }
 
-    // ---- messages (the Mac shows these on its intro screen) ----
+    // ---- a vibescape's compile error, under the header ----
 
-    private void DrawMessages(Frame f, ChromeView v)
+    private void DrawNotice(Frame f)
     {
+        if (_notice is not { } notice || _noticeLeft <= 0) return;
         var s = _s;
-        var y = 72 * s;
         var wrap = Math.Min(f.Size.X * 0.6f, 640 * s);
-        if (_notice is { } notice && _noticeLeft > 0) y = DrawMessage(f, notice, _noticeTone, y, wrap) + 8 * s;
-        if (v.Status is { } status) DrawMessage(f, status, v.StatusSeverity, y, wrap);
-    }
-
-    private float DrawMessage(Frame f, string text, MessageSeverity tone, float top, float wrap)
-    {
-        var s = _s;
         var font = _fonts.Get(Face.Sans, 13);
         var px = 13 * s;
-        ImGui.PushFont(font);
-        var k = px / font.FontSize;
-        var size = ImGui.CalcTextSize(text, false, wrap / k) * k;
-        ImGui.PopFont();
+        var size = MeasureWrapped(Face.Sans, 13, notice, wrap);
         var pad = new Vector2(14, 9) * s;
-        var min = new Vector2((f.Size.X - size.X) / 2 - pad.X, top);
+        var min = new Vector2((f.Size.X - size.X) / 2 - pad.X, 72 * s);
         var max = min + size + pad * 2;
         f.Draw.AddRectFilled(min, max, Colour(0, 0, 0, 0.6f), 10 * s);
-        var colour = tone switch
+        var colour = _noticeTone switch
         {
             MessageSeverity.Error => Colour(1f, 0.55f, 0.5f, 1),
             MessageSeverity.Hint => Colour(1f, 0.9f, 0.6f, 1),
             _ => Colour(0.9f, 0.9f, 0.95f, 1),
         };
         // Untrusted text (custom vibescape names, driver logs) goes in as text, never as a format string.
-        f.Draw.AddText(font, px, min + pad, colour, text, wrap);
-        return max.Y;
+        f.Draw.AddText(font, px, min + pad, colour, notice, wrap);
     }
 
-    // ---- text ----
-
-    private void DrawText(ImDrawListPtr d, Face face, float points, Vector2 pos, string text, uint colour) =>
-        d.AddText(_fonts.Get(face, points), points * _s, pos, colour, text);
-
-    private float Measure(Face face, float points, string text)
+    public void Dispose()
     {
-        var font = _fonts.Get(face, points);
-        ImGui.PushFont(font);
-        var w = ImGui.CalcTextSize(text).X * (points * _s / font.FontSize);
-        ImGui.PopFont();
-        return w;
+        _previews?.Dispose();
+        _imgui.Dispose();
     }
-
-    /// <summary>Text with SwiftUI's tracking (extra space after each character, in points); ImGui has none, so it is set a character at a time.</summary>
-    private float MeasureTracked(Face face, float points, float tracking, string text)
-    {
-        var font = _fonts.Get(face, points);
-        var k = points * _s / font.FontSize;
-        ImGui.PushFont(font);
-        var w = 0f;
-        foreach (var ch in text) w += ImGui.CalcTextSize(ch.ToString()).X * k + tracking * _s;
-        ImGui.PopFont();
-        return w;
-    }
-
-    private void DrawTracked(ImDrawListPtr d, Face face, float points, Vector2 pos, float tracking, string text, uint colour, uint? heart = null)
-    {
-        var font = _fonts.Get(face, points);
-        var px = points * _s;
-        var k = px / font.FontSize;
-        ImGui.PushFont(font);
-        foreach (var ch in text)
-        {
-            var w = ImGui.CalcTextSize(ch.ToString()).X * k;
-            if (ch == '♥' && heart is { } h) DrawHeart(d, pos + new Vector2(0, px * 0.12f), px * 0.8f, h);
-            else d.AddText(font, px, pos, colour, ch.ToString());
-            pos.X += (ch == '♥' ? px * 0.8f : w) + tracking * _s;
-        }
-        ImGui.PopFont();
-    }
-
-    /// <summary>The Mac's purple heart (💜), drawn: the interface fonts have no colour emoji.</summary>
-    private static void DrawHeart(ImDrawListPtr d, Vector2 min, float size, uint colour)
-    {
-        var r = size * 0.27f;
-        d.AddCircleFilled(min + new Vector2(size * 0.29f, size * 0.32f), r, colour);
-        d.AddCircleFilled(min + new Vector2(size * 0.71f, size * 0.32f), r, colour);
-        d.AddTriangleFilled(min + new Vector2(size * 0.04f, size * 0.42f), min + new Vector2(size * 0.96f, size * 0.42f), min + new Vector2(size * 0.5f, size * 0.92f), colour);
-    }
-
-    private string Truncate(Face face, float points, float tracking, string text, float maxWidth)
-    {
-        if (MeasureTracked(face, points, tracking, text) <= maxWidth) return text;
-        for (var n = text.Length - 1; n > 0; n--)
-        {
-            var t = text[..n].TrimEnd() + "…";
-            if (MeasureTracked(face, points, tracking, t) <= maxWidth) return t;
-        }
-        return "…";
-    }
-
-    // ---- helpers ----
-
-    private static Vector4 SourceTint(SourceState state) => state switch
-    {
-        SourceState.Live => Magenta,
-        SourceState.Demo => new Vector4(1f, 0.71f, 0.28f, 1f),
-        SourceState.Error => new Vector4(1f, 0.35f, 0.35f, 1f),
-        _ => new Vector4(0.55f, 0.55f, 0.55f, 1f),
-    };
-
-    private static int IndexOf(IReadOnlyList<VibescapeEntry> list, VibescapeEntry e)
-    {
-        for (var i = 0; i < list.Count; i++) if (list[i].Id == e.Id) return i;
-        return -1;
-    }
-
-    private static bool Inside(Vector2 p, Vector2 min, Vector2 max) => p.X >= min.X && p.X < max.X && p.Y >= min.Y && p.Y < max.Y;
-
-    private static uint Colour(float r, float g, float b, float a) => ImGui.GetColorU32(new Vector4(r, g, b, Math.Clamp(a, 0, 1)));
-    private static uint Colour(Vector4 c, float a) => Colour(c.X, c.Y, c.Z, a);
-    private static uint Colour((float R, float G, float B) c, float a) => Colour(c.R, c.G, c.B, a);
-
-    public void Dispose() => _imgui.Dispose();
 }

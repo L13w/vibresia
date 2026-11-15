@@ -70,7 +70,8 @@ public static partial class Program
 
         var settings = Settings.Load(Settings.DefaultPath(), log);
         var customFolder = CustomVibescapeLoader.DefaultFolder();
-        var catalog = new VibescapeCatalog(CustomVibescapeLoader.LoadAll(customFolder, log));
+        var customs = CustomVibescapeLoader.LoadAll(customFolder, log);
+        var catalog = new VibescapeList(settings, customs).Catalog;
 
         using var sources = new AudioSources();
         using var audio = new AudioPipeline(log);
@@ -131,18 +132,19 @@ public static partial class Program
         else if (host.StartupProblem is { } failed)
             chrome.Notice($"{failed.Entry.Title} didn't load, so this is {host.Current.Title}.\n{failed.Problem.ForScreen()}", MessageSeverity.Error, ErrorSeconds);
         var windowMode = new WindowMode(window, fullScreen);
-        var app = new AppController(log, window, settings, customFolder, catalog, sources, audio, host, chrome, windowMode, paletteIndex,
 #if WINDOWS
-            keepAwake: windows.KeepDisplayAwake);
+        StartAtLogin.FollowThisCopy(log);
+        var system = new SystemHooks(windows.KeepDisplayAwake, StartAtLogin.IsOn, on => StartAtLogin.Set(on, log));
 #else
-            keepAwake: _ => { });
+        var system = SystemHooks.None;
 #endif
+        var app = new AppController(log, window, settings, customFolder, customs, sources, audio, host, chrome, windowMode, paletteIndex, system);
         app.StartAtLaunch();
 
         var chromeState = new ChromeState();
         host.Overlay += dt =>
         {
-            chromeState.Advance(dt, () => WindowPointer.IsInside(window), chrome.OpenMenu != ChromeMenu.None);
+            chromeState.Advance(dt, () => WindowPointer.IsInside(window), chrome.AnythingOpen);
             chrome.Render((float)dt, app.View(lastUniforms ?? new FrameUniforms()), chromeState, app.Actions);
             app.AfterRender();
         };
@@ -157,13 +159,16 @@ public static partial class Program
         foreach (var kb in input.Keyboards)
         {
             // Watched, not taken (as upstream): the app's own keys still work, and the vibescape sees them too.
-            kb.KeyChar += (_, c) => pointer.Typed(c);
+            kb.KeyChar += (_, c) =>
+            {
+                pointer.Typed(c);
+                app.Execute(KeyCommands.ForCharacter(c), c);
+            };
             kb.KeyUp += (_, _, _) => pointer.KeyDown = false;
             kb.KeyDown += (_, key, _) =>
             {
                 pointer.KeyDown = true;
-                var (command, shortcut) = KeyCommands.For(key, chrome.OpenMenu != ChromeMenu.None);
-                app.Execute(command, shortcut);
+                app.Execute(KeyCommands.For(key, chrome.AnythingOpen), '\0');
             };
         }
 

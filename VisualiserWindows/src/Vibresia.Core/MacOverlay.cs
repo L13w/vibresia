@@ -22,6 +22,14 @@ public sealed class MacOverlay
     /// <summary>AudioEngine.isSounding: a live source with rms over the threshold, with hysteresis.</summary>
     public bool IsSounding { get; private set; }
 
+    /// <summary>
+    /// Whether the CRT overlay is wanted at all (Settings → CRT Effect, on by
+    /// default as on the Mac). Turning it off fades it out like silence does.
+    /// The Mac has no such switch: it is an owner-chosen difference, for the
+    /// brighter look of the Mac's exported videos, which leave the overlay out.
+    /// </summary>
+    public bool CrtEnabled { get; set; } = true;
+
     /// <summary>The CRT overlay's opacity, 0..1.</summary>
     public float CrtOpacity => (float)_crt.Value;
 
@@ -42,7 +50,7 @@ public sealed class MacOverlay
     public void Advance(FrameUniforms u, bool live, bool reduceMotion, double dt)
     {
         IsSounding = live && (IsSounding ? u.Rms > SoundingOff : u.Rms > SoundingOn);
-        _crt.Target(IsSounding ? 1 : 0);
+        _crt.Target(IsSounding && CrtEnabled ? 1 : 0);
         _crt.Advance(dt);
 
         var raw = u.BeatStrength;

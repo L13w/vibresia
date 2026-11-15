@@ -58,6 +58,7 @@ internal sealed class AppController
         _source = new SourceSelection(settings, sources.HasLoopback);
         PaletteIndex = paletteIndex;
         host.Palette = Palette.At(paletteIndex);
+        host.CrtEffect = settings.CrtEffect;
         Actions = new ChromeActions(
             PickVibescape: Switch,
             PickPalette: PickPalette,
@@ -68,6 +69,7 @@ internal sealed class AppController
             },
             ToggleFullScreen: ToggleFullScreen,
             ToggleKeepDisplayAwake: ToggleKeepDisplayAwake,
+            ToggleCrtEffect: ToggleCrtEffect,
             OpenCustomFolder: () => OpenFolder(customFolder, log),
             OpenLogFolder: () => OpenFolder(log.Directory, log));
     }
@@ -125,6 +127,14 @@ internal sealed class AppController
         _settings.Save(_log);
     }
 
+    private void ToggleCrtEffect()
+    {
+        _settings.CrtEffect = !_settings.CrtEffect;
+        _host.CrtEffect = _settings.CrtEffect;
+        _log.Info("render", _settings.CrtEffect ? "CRT effect on" : "CRT effect off");
+        _settings.Save(_log);
+    }
+
     /// <summary>Carries out what a key asked for (<see cref="KeyCommands"/>).</summary>
     public void Execute(AppCommand command, char shortcut)
     {
@@ -151,7 +161,7 @@ internal sealed class AppController
         var (text, severity) = AudioStatusMessage.For(_audio.Status, _audio.FailureMessage, onDemo: _source.Chosen == AudioChoice.Demo);
         return new ChromeView(_catalog.Entries, _host.Current, PaletteIndex,
             _source.Chosen, SourcePill.State(_audio.Status, _sources.ChoiceOf(_audio.Source)),
-            _windowMode.FullScreen, _settings.KeepDisplayAwake,
+            _windowMode.FullScreen, _settings.KeepDisplayAwake, _settings.CrtEffect,
             u.Bands, u.BeatStrength, text, severity);
     }
 

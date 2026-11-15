@@ -19,14 +19,14 @@ public sealed record ChromeView(
     IReadOnlyList<VibescapeEntry> Vibescapes, VibescapeEntry Current,
     int PaletteIndex,
     AudioChoice ChosenSource, SourceState SourceState,
-    bool FullScreen, bool KeepDisplayAwake,
+    bool FullScreen, bool KeepDisplayAwake, bool CrtEffect,
     float[] Bands, float BeatStrength,
     string? Status, MessageSeverity StatusSeverity);
 
 /// <summary>Where the chrome's choices go.</summary>
 public sealed record ChromeActions(
     Action<VibescapeEntry> PickVibescape, Action<int> PickPalette, Action<AudioChoice> PickSource,
-    Action ToggleFullScreen, Action ToggleKeepDisplayAwake, Action OpenCustomFolder, Action OpenLogFolder);
+    Action ToggleFullScreen, Action ToggleKeepDisplayAwake, Action ToggleCrtEffect, Action OpenCustomFolder, Action OpenLogFolder);
 
 /// <summary>
 /// The Mac's interface over the vibescape (VisualiserMac UI/ContentView,
@@ -317,6 +317,7 @@ public sealed class MacChrome : IDisposable
         [
             new Row("Full Screen", a.ToggleFullScreen, v.FullScreen, "F11"),
             new Row("Keep the Display Awake", a.ToggleKeepDisplayAwake, v.KeepDisplayAwake, "Stops Windows dimming or sleeping it"),
+            new Row("CRT Effect", a.ToggleCrtEffect, v.CrtEffect, "Scanlines and vignette, as on the Mac"),
             new Row("Open Custom Vibescapes Folder", a.OpenCustomFolder, false, "Drop .json vibescapes here"),
             new Row("Open Log Folder", a.OpenLogFolder, false, "F12"),
         ],

@@ -45,6 +45,13 @@ public sealed class VibescapeHost
     /// <summary>Whether an audio source is running (the CRT overlay shows only with a live source making sound). Set by the app.</summary>
     public bool SourceLive { get; set; } = true;
 
+    /// <summary>Whether the CRT overlay is drawn when there is sound (<see cref="MacOverlay.CrtEnabled"/>).</summary>
+    public bool CrtEffect
+    {
+        get => _macOverlay.CrtEnabled;
+        set => _macOverlay.CrtEnabled = value;
+    }
+
     /// <summary>The user asked for less motion (Windows "Animation effects" off): no beat flash, as the Mac honours Reduce Motion.</summary>
     public bool ReduceMotion { get; set; }
 

@@ -329,6 +329,30 @@ public sealed class SettingsTests : IDisposable
     }
 
     [Fact]
+    public void TheCrtEffectIsOnByDefaultAndRoundTrips()
+    {
+        using var log = NewLog();
+        var s = Settings.Load(PathName, log);
+        Assert.True(s.CrtEffect);
+        s.CrtEffect = false;
+        s.Save(log);
+        Assert.False((bool)JsonNode.Parse(File.ReadAllText(PathName))!["crtEffect"]!);
+        Assert.False(Settings.Load(PathName, log).CrtEffect);
+    }
+
+    [Theory]
+    [InlineData("\"off\"")]
+    [InlineData("0")]
+    [InlineData("null")]
+    public void ACrtEffectOfTheWrongTypeMeansOn(string value)
+    {
+        Directory.CreateDirectory(_dir);
+        File.WriteAllText(PathName, $$"""{"version":1,"crtEffect":{{value}}}""");
+        using var log = NewLog();
+        Assert.True(Settings.Load(PathName, log).CrtEffect);
+    }
+
+    [Fact]
     public void UnknownKeysSurviveASave()
     {
         Directory.CreateDirectory(_dir);
@@ -566,6 +590,23 @@ public class MacOverlayTests
         Assert.Equal(1f, m.CrtOpacity, 3);
         m.Advance(Frame(rms: 0), true, false, 0.125);
         Assert.Equal(1 - 2 * 0.25 * 0.25, m.CrtOpacity, 3);
+    }
+
+    [Fact]
+    public void TurningTheCrtEffectOffFadesItOutAndKeepsItOutWhileSounding()
+    {
+        var m = new MacOverlay();
+        m.Advance(Frame(rms: 0.02f), true, false, 0.5);
+        Assert.Equal(1f, m.CrtOpacity, 3);
+        m.CrtEnabled = false;
+        m.Advance(Frame(rms: 0.02f), true, false, 0.25);
+        Assert.Equal(0.5f, m.CrtOpacity, 3);        // the same eased half-second fade as silence
+        m.Advance(Frame(rms: 0.02f), true, false, 1);
+        Assert.Equal(0f, m.CrtOpacity, 3);
+        Assert.True(m.IsSounding);                  // the switch hides the overlay, not the sound
+        m.CrtEnabled = true;
+        m.Advance(Frame(rms: 0.02f), true, false, 0.5);
+        Assert.Equal(1f, m.CrtOpacity, 3);
     }
 
     [Theory]

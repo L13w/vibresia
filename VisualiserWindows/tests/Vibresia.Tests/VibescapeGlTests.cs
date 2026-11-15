@@ -214,7 +214,7 @@ public sealed class VibescapeGlTests : IDisposable
             chrome.Notice("Line 3 needs a fix: %s %n %d\nsecond line", MessageSeverity.Error, 10);
             var state = new ChromeState();
             var inside = true;
-            var actions = new ChromeActions(_ => { }, _ => { }, _ => { }, () => { }, () => { }, () => { }, () => { });
+            var actions = new ChromeActions(_ => { }, _ => { }, _ => { }, () => { }, () => { }, () => { }, () => { }, () => { });
             var bands = Enumerable.Range(0, FrameUniforms.BandCount).Select(i => (i % 7) / 7f).ToArray();
             var menus = new[] { ChromeMenu.Vibescape, ChromeMenu.Palette, ChromeMenu.Source, ChromeMenu.Settings, ChromeMenu.None };
             var frames = 0;
@@ -224,7 +224,7 @@ public sealed class VibescapeGlTests : IDisposable
             {
                 state.Advance(dt, () => inside, chrome.OpenMenu != ChromeMenu.None);
                 var view = new ChromeView(catalog.Entries, host.Current, 2, AudioChoice.Loopback, SourceState.Live,
-                    false, true, bands, 0.6f, "Can't hear anything: %s.", MessageSeverity.Error);
+                    false, true, true, bands, 0.6f, "Can't hear anything: %s.", MessageSeverity.Error);
                 if (frames < menus.Length && menus[frames] != ChromeMenu.None) chrome.Open(menus[frames]);
                 chrome.Render((float)dt, view, state, actions);
                 var size = window.Size;

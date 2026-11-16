@@ -2,7 +2,7 @@
 
 Visual worlds that move with whatever your PC is playing: neon tunnels, silk ribbons, a dancing llama. Play some music and Vibresia turns it into a live scene that pulses with the bass and sparkles with the treble.
 
-This is an unofficial Windows version of [Vibresia](../README.md), the free macOS app by Syd Lawrence / Minith Labs. It runs the Mac app's own vibescapes, unchanged, and copies its look and controls. It is MIT licensed, like the original (see [`../LICENSE`](../LICENSE)). Windows version by Llew Roberts ([inertialnavigation.com](https://inertialnavigation.com)).
+This is a community-built Windows version (beta) of [Vibresia](../README.md), the free macOS app by Syd Lawrence / Minith Labs. It runs the Mac app's own vibescapes, unchanged, and copies its look and controls. It is MIT licensed, like the original (see [`../LICENSE`](../LICENSE)). Windows version by Llew Roberts ([inertialnavigation.com](https://inertialnavigation.com)).
 
 Nothing is recorded or sent anywhere: the sound is analysed in memory, and the app makes no network connections.
 
@@ -13,7 +13,7 @@ Nothing is recorded or sent anywhere: the sound is analysed in memory, and the a
 
 ## Install
 
-1. Download the latest `Vibresia-Windows-….zip` from the [releases page](https://github.com/L13w/vibresia/releases).
+1. Download the latest Windows build (a `windows-v…` pre-release, `Vibresia-Windows-x64.zip`) from the [releases page](https://github.com/sydlawrencedev/vibresia/releases). Until the first one is published there, test builds are on [the port's own releases page](https://github.com/L13w/vibresia/releases).
 2. Unzip it anywhere and run `Vibresia.exe`. There is no installer, and nothing else to install.
 3. The app isn't signed yet, so Windows SmartScreen may warn the first time: choose **More info → Run anyway**.
 
@@ -65,12 +65,12 @@ If one doesn't compile, Vibresia says why, with the line number in your code, an
 
 ## Problems
 
-Press **F12** to open the log folder, and attach `vibresia.log` to an issue on [the Windows version's tracker](https://github.com/L13w/vibresia/issues). The log records the graphics card, the audio device, and anything that went wrong. It holds no audio and nothing about what was playing.
+Press **F12** to open the log folder, and attach `vibresia.log` to [an issue](https://github.com/sydlawrencedev/vibresia/issues), saying it's about the Windows version. The log records the graphics card, the audio device, and anything that went wrong. It holds no audio and nothing about what was playing.
 
 ## How it differs from the Mac app
 
 - **Not here yet:** Auto Scan, The Band and Machine; song identification, genre and track position; MIDI input; the vibescape editor, sharing, the gallery and update checks.
-- **Left out on purpose:** in the credits, the coffee button and the share link (this isn't an official Minith Labs build); Open with Music or Spotify, analytics, and the privacy and terms links (they describe the Mac app).
+- **Left out on purpose:** in the credits, the coffee button and the share link (a community port shouldn't ask for money on Minith Labs' behalf); Open with Music or Spotify, analytics, and the privacy and terms links (they describe the Mac app).
 - **Different on Windows:**
   - A **Settings** drop-down stands in for the Mac's menu bar, and also holds Start at Login and Float Above Other Apps, which the Mac keeps in its credits.
   - The window keeps Windows' title bar.

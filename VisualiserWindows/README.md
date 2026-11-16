@@ -1,42 +1,91 @@
 # Vibresia for Windows
 
-An independent Windows port of [Vibresia](../README.md): visual worlds that move with whatever your PC is playing. It is not an official Minith Labs release. The original macOS app and its vibescapes are by Syd Lawrence / Minith Labs, MIT licensed (see `../LICENSE`).
+Visual worlds that move with whatever your PC is playing: neon tunnels, silk ribbons, a dancing llama. Play some music and Vibresia turns it into a live scene that pulses with the bass and sparkles with the treble.
 
-The port runs the macOS app's own GLSL shaders, unchanged, through OpenGL 3.3, and reacts to whatever the PC is playing (WASAPI loopback), the microphone, or a built-in demo tone. Nothing is recorded or sent anywhere: audio is analysed in memory.
+This is an unofficial Windows version of [Vibresia](../README.md), the free macOS app by Syd Lawrence / Minith Labs. It runs the Mac app's own vibescapes, unchanged, and copies its look and controls. It is MIT licensed, like the original (see [`../LICENSE`](../LICENSE)). Windows version by Llew Roberts ([inertialnavigation.com](https://inertialnavigation.com)).
 
-## Running it
+Nothing is recorded or sent anywhere: the sound is analysed in memory, and the app makes no network connections.
 
-Download the zip from the fork's releases, unzip it, and run `Vibresia.exe`. Windows SmartScreen will warn about an unsigned app: choose **More info → Run anyway**.
+## What you need
 
-It opens in a window, as the Mac app does. Until something is listening, the Mac's intro asks what to listen to (and says why, if a source stopped working). The header across the top has the Mac's drop-downs: the vibescape, the colour palette, and what to listen to (system audio, microphone or the demo tone, which plays aloud). A **Settings** drop-down holds what the Mac keeps in its menu bar: full screen, keeping the display awake, the CRT effect (a Windows addition), and the custom vibescapes and log folders. The vibescape drop-down ends with **VIEW ALL**, the Mac's panel of every vibescape: switch off the ones you don't want in the list, drag them into your own order, or click a picture to switch to it. The header and the meter on the right slide away when the pointer leaves the window. The **♥ from Minith Labs** button in the bottom-right corner opens the credits, with **Start at login** and **Float above other apps**.
+- Windows 10 or 11, 64-bit.
+- A graphics card that supports OpenGL 3.3. Almost any card or built-in graphics from the last ten years does. If yours doesn't, Vibresia says so and suggests updating the graphics driver.
+
+## Install
+
+1. Download the latest `Vibresia-Windows-….zip` from the [releases page](https://github.com/L13w/vibresia/releases).
+2. Unzip it anywhere and run `Vibresia.exe`. There is no installer, and nothing else to install.
+3. The app isn't signed yet, so Windows SmartScreen may warn the first time: choose **More info → Run anyway**.
+
+To remove it, delete the folder. If you want your settings and logs gone too, delete `%APPDATA%\Vibresia` and `%LOCALAPPDATA%\Vibresia`.
+
+## Using it
+
+When it starts, Vibresia asks what to listen to:
+
+- **Share System Audio**: whatever the PC is playing: Spotify, YouTube, games.
+- **Use Microphone**: whatever the mic hears.
+- **Use Demo Tone**: a built-in beat, played aloud, for trying it with nothing else playing.
+
+Next time it starts with the same choice, except the microphone, which always waits to be asked for.
+
+Across the top are four drop-downs:
+
+- **The vibescape.** Its last row, **VIEW ALL**, opens every vibescape with a picture of each. Switch off the ones you don't want in the list, drag them into your own order, or click one to switch to it.
+- **The colour palette.** Five of them, from NEON to MONO.
+- **What it's listening to.**
+- **Settings:** Full Screen, Keep the Display Awake, CRT Effect (the scanlines and vignette; off gives a brighter picture), Float Above Other Apps, Start at Login, and the folders for your own vibescapes and the log.
+
+The top bar and the level meter slide away when the pointer leaves the window, and come back when it returns. The vibescape's name stays in the bottom-left corner. The **♥ from Minith Labs** button in the bottom-right corner shows the credits.
 
 | Key | Does |
 |---|---|
-| 1 … 9, 0, then - [ ] ; ' \ , . / ` and ! @ # $ % ^ & * ( ) | Pick a vibescape by its place in the list (switched-on ones only), as on the Mac; the drop-down shows each one's key |
-| F11 | Full screen / windowed |
+| 1 … 9, 0, then - [ ] ; ' \ , . / ` and ! @ # $ % ^ & * ( ) | Pick a vibescape by its place in the list. The drop-down shows each one's key. |
 | ← / → | Previous / next vibescape |
-| D | Switch between this PC's sound and the demo tone |
-| Esc | Close an open drop-down, the credits or the View All panel; otherwise quit |
-| F12 | Open the log folder (send `vibresia.log` when reporting a problem) |
+| F11 | Full screen / windowed |
+| D | Switch between the PC's sound and the demo tone |
+| Esc | Close whatever is open; otherwise quit |
+| F12 | Open the log folder |
 
-Vibescapes are drawn at 1× (your display's size before Windows scaling) and stretched to the screen, as the Mac draws them, with the Mac's CRT overlay and beat flash on top; turning off Windows' *Animation effects* turns off the flash.
+Turning off Windows' *Animation effects* (Settings → Accessibility → Visual effects) turns off the flash on each beat. `--fullscreen` starts it full screen, and `--palette N` (0–4) starts on another palette for that run.
 
-The last vibescape, audio source and palette, whether to keep the display awake (off unless you turn it on), the CRT effect (on unless you turn it off), the list's order and which vibescapes are switched off, and floating above other apps, are remembered in `%APPDATA%\Vibresia\settings.json`. As on the Mac, a microphone used last time isn't switched on again until you pick it. Start at login is Windows' own startup entry (you'll also see it in Task Manager's Startup apps); each time Vibresia opens it points that entry at the copy you opened, so a new build unzipped to a new folder takes over by itself. `--fullscreen` starts full screen; `--palette N` (0–4) starts on another palette for that run.
+## Settings and files
+
+- `%APPDATA%\Vibresia\settings.json` holds the choices Vibresia remembers: the vibescape, the audio source, the palette, the list's order and switches, and the Settings menu's options.
+- `%APPDATA%\Vibresia\Vibescapes\` is for your own vibescapes.
+- `%LOCALAPPDATA%\Vibresia\Logs\` holds `vibresia.log` (F12 opens it).
+
+Start at Login uses Windows' own startup list, so it also appears in Task Manager under Startup apps. Each time Vibresia opens, it points that entry at the copy you opened, so a newer version unzipped into a different folder takes over by itself.
 
 ## Your own vibescapes
 
-Put vibescape `.json` files (the macOS app's format, so a file copied from a Mac works) in `%APPDATA%\Vibresia\Vibescapes\`. **Settings → Open Custom Vibescapes Folder** opens it. Opening the vibescape drop-down or the View All panel rescans the folder, so there is no need to restart. Switching one off in the panel is remembered in settings.json; your files are never changed. One that doesn't compile shows why (with the line in your code), and the previous vibescape keeps playing.
+A vibescape is a small shader in a `.json` file, in the same format as the Mac app's, so a file copied from a Mac works here. Put the files in `%APPDATA%\Vibresia\Vibescapes\` (**Settings → Open Custom Vibescapes Folder** opens it). Opening the vibescape list rescans the folder, so there is no need to restart.
 
-Not yet the same as the Mac:
+If one doesn't compile, Vibresia says why, with the line number in your code, and keeps showing the previous vibescape. Switching one off in VIEW ALL is remembered in `settings.json`; your files are never changed. The main [README](../README.md#custom-vibescapes-and-the-local-mcp-server) explains how to write one.
 
-- Missing: Auto Scan, The Band and Machine; song identification, genre and track position; MIDI input; the editor, sharing, the gallery and update checks; in the credits, the Proudly Shareware section with its coffee button, and the share link (left out by choice: this isn't an official build), Open with Music or Spotify, Identify by listening, analytics, and the privacy and terms links (they describe the Mac app).
-- Different on Windows: a **Settings** drop-down stands in for the Mac's menu bar; the window keeps Windows' title bar; full screen is a borderless window one pixel taller than the monitor (an exactly-fitting one blanked a 4K screen when the pointer crossed to another display); keeping the display awake is an option the Mac doesn't have (off by default); the palette is remembered between launches (the Mac starts on NEON each time); **Settings → CRT Effect** turns off the scanlines and vignette for a brighter picture, like the Mac's exported videos (the Mac window always draws them); the intro says why a source failed (the Mac's just comes back); the list's order and switches live in settings.json rather than in your vibescape files, and Kaleidoscope (not Tunnel, which this port doesn't have) is the one that can't be switched off; in the View All panel your own vibescapes can't be edited, copied or deleted (use the folder); with no speakers the demo tone runs silently.
-- Port additions: ← / →, D, F12, and Esc to quit.
-- Custom vibescapes: a file with an empty `id` is skipped (the Mac loads it); the footer credit and the panel's author names aren't links.
+## Problems
 
-The pointer and keys reach the vibescapes as on the Mac.
+Press **F12** to open the log folder, and attach `vibresia.log` to an issue on [the Windows version's tracker](https://github.com/L13w/vibresia/issues). The log records the graphics card, the audio device, and anything that went wrong. It holds no audio and nothing about what was playing.
 
-## Building (works on Linux or Windows)
+## How it differs from the Mac app
+
+- **Not here yet:** Auto Scan, The Band and Machine; song identification, genre and track position; MIDI input; the vibescape editor, sharing, the gallery and update checks.
+- **Left out on purpose:** in the credits, the coffee button and the share link (this isn't an official Minith Labs build); Open with Music or Spotify, analytics, and the privacy and terms links (they describe the Mac app).
+- **Different on Windows:**
+  - A **Settings** drop-down stands in for the Mac's menu bar, and also holds Start at Login and Float Above Other Apps, which the Mac keeps in its credits.
+  - The window keeps Windows' title bar.
+  - Full screen is a borderless window one pixel taller than the monitor, because one that fits exactly blanked a 4K screen when the pointer moved to another display.
+  - Additions: the palette is remembered between launches, Keep the Display Awake and CRT Effect are options, the intro says why a source stopped working, and the keys ← / →, D, F12 and Esc (quit) are new.
+  - The list's order and switches live in `settings.json` rather than in your vibescape files. Kaleidoscope is the one vibescape that can't be switched off (on the Mac it's Tunnel, which isn't in this version yet).
+  - In VIEW ALL, your own vibescapes can't be edited, copied or deleted from the app; use the folder.
+  - With no speakers the demo tone runs silently.
+  - A custom vibescape with an empty `id` is skipped (the Mac loads it), and author names aren't links.
+
+## For developers
+
+The port is C# on .NET 10: Silk.NET for the window, OpenGL 3.3 and input; NAudio for Windows audio; and Dear ImGui's draw lists for the interface. The vibescapes are the Mac app's own GLSL shaders, extracted from its Swift sources, so they look the same and stay in step with it.
+
+### Building (Linux or Windows)
 
 Needs the .NET 10 SDK.
 
@@ -45,33 +94,31 @@ dotnet build
 dotnet publish src/Vibresia.App -c Release -f net10.0-windows -r win-x64 --self-contained -p:PublishSingleFile=true -o out
 ```
 
-`out/` then holds `Vibresia.exe`, `glfw3.dll` and `cimgui.dll`. Ship all three.
+`out/` then holds `Vibresia.exe`, `glfw3.dll` and `cimgui.dll`. Ship all three. The `net10.0` target (no `-windows`) builds without Windows audio and uses a silent demo tone; it is what runs on Linux, and what the tests use.
 
-The `net10.0` target (no `-windows`) builds without audio capture and uses a silent demo tone; it is what runs on Linux.
-
-## Tests
+### Tests
 
 ```
-dotnet test                       # everything (needs a display or xvfb-run for the GL tests)
+dotnet test                       # everything (needs a display, or xvfb-run, for the GL tests)
 dotnet test --filter Category!=GL # no GPU or display needed
 ```
 
 On a headless Linux machine: `xvfb-run -a dotnet test`. This needs Mesa (`libgl1-mesa-dri libegl1 libglx-mesa0`), `xvfb` and `libxinerama1`.
 
-## Shaders
+### Shaders
 
-`shaders/` is generated from the macOS sources and is never edited by hand. After pulling upstream changes, run:
+`shaders/` is generated from the macOS sources and is never edited by hand. After pulling changes to the Mac app, run:
 
 ```
 dotnet run --project tools/Vibresia.ShaderExtract
 ```
 
-A test fails whenever `shaders/` and the macOS sources disagree.
+A test fails whenever `shaders/` and the macOS sources disagree. The pictures in VIEW ALL are the website's (`../site/media/modes`), built into the exe.
 
-## Layout
+### Layout
 
-- `src/Vibresia.Core`: audio analysis, tempo, motion clocks, demo tone, uniforms, the vibescape catalog and custom loader, palettes, settings, logging, and the interface's testable rules (layout tiers, when the chrome hides, meter bars, the source pill). No GL and no Windows APIs.
-- `src/Vibresia.Audio.Windows`: capture of the PC's playback and the microphone, and the audible demo tone (NAudio).
-- `src/Vibresia.Render`: OpenGL window, renderer and the Mac's interface (Silk.NET, ImGui).
-- `src/Vibresia.App`: the executable.
-- `tools/Vibresia.ShaderExtract`: pulls GLSL out of the Swift sources.
+- `src/Vibresia.Core`: audio analysis, tempo, motion clocks, the demo tone, uniforms, the vibescape catalog and loader, palettes, settings, logging, and the interface's rules (layout, when the chrome hides, the meter, the intro, the list's order and switches). No GL and no Windows APIs, so it is all testable on Linux.
+- `src/Vibresia.Audio.Windows`: capturing the PC's playback and the microphone, and playing the demo tone (NAudio).
+- `src/Vibresia.Render`: the OpenGL window, the renderer, and the interface (Silk.NET, ImGui).
+- `src/Vibresia.App`: the executable, which wires the pieces together.
+- `tools/Vibresia.ShaderExtract`: pulls the GLSL out of the Swift sources.

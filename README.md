@@ -19,6 +19,7 @@ Found a bug or have an idea? [File an issue](https://github.com/sydlawrencedev/v
 | Path | What |
 |---|---|
 | `VisualiserMac/` | The macOS app (Swift, SwiftUI, OpenGL). See its [README](VisualiserMac/README.md). |
+| `VisualiserWindows/` | An unofficial Windows version (C#, .NET, OpenGL) by Llew Roberts, running the macOS app's own vibescapes. See its [README](VisualiserWindows/README.md). |
 | `site/` | The landing page, installer (`install.sh`) and AI install instructions (`install.md`, `llms.txt`). |
 | `site/analytics.js` | Anonymous page-view / click tracking for the landing page. |
 | `site/github.js` | Changelog and open issues, fetched from the GitHub API when scrolled into view. |

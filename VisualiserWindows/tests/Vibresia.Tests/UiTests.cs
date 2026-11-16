@@ -434,6 +434,18 @@ public class SystemRulesTests
         Assert.False(StartupEntry.IsSet(""));
     }
 
+    /// <summary>An app turned off in Task Manager keeps its Run entry; the separate approval value's odd first byte is what says it won't run.</summary>
+    [Fact]
+    public void StartAtLoginIsOffWhenTaskManagerTurnedItOff()
+    {
+        const string command = "\"C:\\v\\Vibresia.exe\"";
+        Assert.True(StartupEntry.IsOn(command, null));                                     // no approval value: allowed
+        Assert.True(StartupEntry.IsOn(command, [0x02, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]));  // allowed
+        Assert.False(StartupEntry.IsOn(command, [0x03, 0x9A, 0x1B, 0, 0, 0, 0, 0, 0, 0, 0, 0])); // turned off, with when
+        Assert.False(StartupEntry.IsOn(null, [0x02]));                                     // no entry: off whatever else
+        Assert.True(StartupEntry.IsOn(command, []));
+    }
+
     [Fact]
     public void OpeningTheListOrPanelRescansAndOpeningSettingsReadsStartAtLogin()
     {

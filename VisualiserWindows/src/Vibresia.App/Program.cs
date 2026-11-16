@@ -135,7 +135,7 @@ public static partial class Program
         var windowMode = new WindowMode(window, fullScreen);
 #if WINDOWS
         StartAtLogin.FollowThisCopy(log);
-        var system = new SystemHooks(windows.KeepDisplayAwake, StartAtLogin.IsOn, on => StartAtLogin.Set(on, log));
+        var system = new SystemHooks(windows.KeepDisplayAwake, () => StartAtLogin.IsOn(log), on => StartAtLogin.Set(on, log));
 #else
         var system = SystemHooks.None;
 #endif

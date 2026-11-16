@@ -32,7 +32,7 @@ public sealed class ChromeState
     public float Shown => (float)_shown.Value;
 
     /// <param name="pointerInWindow">Asked at each poll: is the pointer over the window right now?</param>
-    /// <param name="menuOpen">A drop-down is open.</param>
+    /// <param name="menuOpen">A drop-down, the credits or the View All panel is open: the chrome stays up while it is.</param>
     public void Advance(double dt, Func<bool> pointerInWindow, bool menuOpen)
     {
         _clock += dt;

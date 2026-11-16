@@ -51,7 +51,7 @@ Turning off Windows' *Animation effects* (Settings → Accessibility → Visual 
 
 ## Settings and files
 
-- `%APPDATA%\Vibresia\settings.json` holds the choices Vibresia remembers: the vibescape, the audio source, the palette, the list's order and switches, and the Settings menu's options.
+- `%APPDATA%\Vibresia\settings.json` holds the choices Vibresia remembers: the vibescape, the audio source, the palette, the list's order and switches, Keep the Display Awake, CRT Effect and Float Above Other Apps. Full Screen isn't remembered, and Start at Login lives in Windows' startup list.
 - `%APPDATA%\Vibresia\Vibescapes\` is for your own vibescapes.
 - `%LOCALAPPDATA%\Vibresia\Logs\` holds `vibresia.log` (F12 opens it).
 

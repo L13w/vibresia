@@ -30,6 +30,19 @@ public static class StartupEntry
     /// <summary>Whether an entry's command means Start at login is on (anything but blank).</summary>
     public static bool IsSet(string? command) => command is not null && command.Trim().Length > 0;
 
+    /// <summary>
+    /// Whether Windows will actually run the entry at sign-in. Turning an app
+    /// off in Task Manager's Startup apps (or Settings → Apps → Startup) keeps
+    /// its Run entry and records the choice separately, in
+    /// Explorer\StartupApproved\Run: a binary value whose first byte is even
+    /// when the app is allowed (02) and odd when it was turned off (03),
+    /// followed by when that happened. No value there means allowed.
+    /// </summary>
+    /// <param name="command">The Run entry's command, or null when there is none.</param>
+    /// <param name="approval">The StartupApproved value, or null when there is none.</param>
+    public static bool IsOn(string? command, byte[]? approval) =>
+        IsSet(command) && !(approval is { Length: > 0 } && (approval[0] & 1) == 1);
+
     /// <summary>The command to write so a switched-on entry opens <paramref name="exePath"/>, or null when it is off or already does.</summary>
     public static string? Repointed(string? command, string exePath)
     {

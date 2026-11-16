@@ -48,7 +48,7 @@ public sealed class Settings
     /// <summary>Vibescapes the user switched on or off in the View All panel; one not named keeps its default.</summary>
     public IReadOnlyDictionary<VibescapeId, bool> Switches { get; set; } = new Dictionary<VibescapeId, bool>();
 
-    /// <summary>Keep the window above other apps' windows (the credits popover's "Float above other apps"). Off by default, as on the Mac.</summary>
+    /// <summary>Keep the window above other apps' windows (Settings → Float Above Other Apps). Off by default, as on the Mac.</summary>
     public bool FloatOnTop { get; set; }
 
     /// <summary>Ask Windows not to dim or turn off the display while running. Off by default, as the Mac doesn't ask.</summary>

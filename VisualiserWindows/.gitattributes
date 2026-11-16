@@ -1,0 +1,5 @@
+# The generated shaders are compared byte for byte with what the extractor
+# makes from the Swift sources (CommittedShadersMatchUpstream), so they keep
+# LF line endings on every checkout. A Windows checkout with core.autocrlf
+# would otherwise turn them CRLF and fail that test on a Windows runner.
+shaders/** text eol=lf

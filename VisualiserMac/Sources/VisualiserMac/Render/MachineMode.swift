@@ -186,19 +186,44 @@ struct MachineMode {
     ]
 
     /// THREE.Spline.getPoint: Catmull-Rom through the points, clamped ends.
+    ///
+    /// Every step is a separately typed value, and the scalar multiplications
+    /// are done on the components rather than on the vector. Swift has to
+    /// resolve which of SIMD's several scalar operators `2 * p1` means before
+    /// it can type the result, and in a module this size that search takes
+    /// long enough for the compiler to give up — it then reports the
+    /// expression as un-type-checkable rather than wrong. Naming the type of
+    /// each step, and scaling by component, leaves it nothing to infer.
     static func spline(_ pts: [SIMD3<Float>], _ k: Float) -> SIMD3<Float> {
-        let point = Float(pts.count - 1) * min(max(k, 0), 1)
-        let i = min(Int(point), pts.count - 1)
-        let w = point - Float(i)
-        let p0 = pts[i == 0 ? i : i - 1]
-        let p1 = pts[i]
-        let p2 = pts[min(i + 1, pts.count - 1)]
-        let p3 = pts[min(i + 2, pts.count - 1)]
-        let v0 = (p2 - p0) * 0.5, v1 = (p3 - p1) * 0.5
-        let w2 = w * w, w3 = w2 * w
-        let a: SIMD3<Float> = (2 * p1 - 2 * p2 + v0 + v1) * w3
-        let b: SIMD3<Float> = (-3 * p1 + 3 * p2 - 2 * v0 - v1) * w2
-        return a + b + v0 * w + p1
+        let point: Float = Float(pts.count - 1) * min(max(k, 0), 1)
+        let i: Int = min(Int(point), pts.count - 1)
+        let w: Float = point - Float(i)
+        let p0: SIMD3<Float> = pts[i == 0 ? i : i - 1]
+        let p1: SIMD3<Float> = pts[i]
+        let p2: SIMD3<Float> = pts[min(i + 1, pts.count - 1)]
+        let p3: SIMD3<Float> = pts[min(i + 2, pts.count - 1)]
+        let v0: SIMD3<Float> = scaled(p2 - p0, by: 0.5)
+        let v1: SIMD3<Float> = scaled(p3 - p1, by: 0.5)
+        let w2: Float = w * w
+        let w3: Float = w2 * w
+        let a: SIMD3<Float> = scaled(
+            scaled(p1, by: 2.0) - scaled(p2, by: 2.0) + v0 + v1,
+            by: w3
+        )
+        let b: SIMD3<Float> = scaled(
+            scaled(p1, by: -3.0) + scaled(p2, by: 3.0) - scaled(v0, by: 2.0) - v1,
+            by: w2
+        )
+        return a + b + scaled(v0, by: w) + p1
+    }
+
+    /// A vector times a number, done on the components.
+    ///
+    /// The same arithmetic as the vector operator, written so the compiler
+    /// never has to choose between SIMD's overloads.
+    @inline(__always)
+    static func scaled(_ v: SIMD3<Float>, by s: Float) -> SIMD3<Float> {
+        SIMD3<Float>(v.x * s, v.y * s, v.z * s)
     }
 
     static func camera(progress k: Float) -> (pos: SIMD3<Float>, target: SIMD3<Float>) {

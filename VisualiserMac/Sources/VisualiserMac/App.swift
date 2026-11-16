@@ -166,6 +166,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
 
+        // Put the window where the person can see it. SwiftUI restores the
+        // frame the window had last time, and that frame can point at a
+        // display that has since been unplugged, or one that is showing
+        // something else. A window that has landed somewhere the person
+        // isn't looking is not a window anybody can use: the app looks like
+        // it hung, because there is nothing on screen to click.
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            self.placeWindowWhereItCanBeSeen()
+        }
+
         // Offer to move the app to Applications, if it isn't already there.
         // A moment's delay so the window is up before the sheet appears on
         // top of it.
@@ -431,6 +442,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         print("[startup] music watcher:   \(manager.watchMusicApps) — \(manager.watchMusicAppsDetail)")
         if let error = manager.errorMessage { print("[startup] error: \(error)") }
         exit(0)
+    }
+
+    /// Moves the window onto the display the person is actually using.
+    ///
+    /// A window that has landed on the wrong display looks exactly like a hung
+    /// app: there is nothing on the screen being looked at, so nothing answers
+    /// a click, and macOS offers to say the app is not responding. macOS will
+    /// happily restore a window to a frame that points at a display which was
+    /// unplugged since the last run, or at one that is attached but that the
+    /// person has since stopped using — and the app has no way to ask where
+    /// they meant it to go.
+    ///
+    /// So the window is put on the display the person is working on, unless it
+    /// is already there and visible. "The display the person is working on" is
+    /// the one under the pointer, falling back to the main display when the
+    /// pointer is not on any of them.
+    @MainActor
+    private func placeWindowWhereItCanBeSeen() {
+        guard let window = NSApp.windows.first(where: { $0.canBecomeMain }) else { return }
+        let frame = window.frame
+        let screens = NSScreen.screens
+
+        // The display the person is working on: the one under the pointer, or
+        // the main display when the pointer is somewhere else.
+        let pointer = NSEvent.mouseLocation
+        let working = screens.first { $0.frame.contains(pointer) } ?? NSScreen.main
+        guard let working else { return }
+
+        // Is any of the window on a display that is attached and switched on?
+        let somewhere = screens.contains { $0.visibleFrame.intersects(frame) }
+
+        // Already on the display being worked on, and showing: leave it alone.
+        // Somebody who has deliberately put the visualiser on their second
+        // screen gets to keep it there.
+        if somewhere, working.visibleFrame.intersects(frame) { return }
+
+        // Not where the person is working. Put it there, keeping the size it
+        // had but no bigger than the display can show.
+        let size = NSSize(
+            width: min(frame.width, working.visibleFrame.width),
+            height: min(frame.height, working.visibleFrame.height)
+        )
+        let origin = NSPoint(
+            x: working.visibleFrame.midX - size.width / 2,
+            y: working.visibleFrame.midY - size.height / 2
+        )
+        window.setFrame(NSRect(origin: origin, size: size), display: true)
+        NSLog("[window] was on the wrong display; moved to the one in use")
     }
 
     /// Session tallies (vibescape switches, palette switches) only reach PostHog on

@@ -116,3 +116,17 @@ jobs:
       - name: Genre detector
         working-directory: VisualiserMac
         run: python3 Tests/test_detector.py
+
+      # The release script's notarization control flow: an ad-hoc build
+      # publishes with a warning, a Developer ID build that cannot be
+      # notarized does not publish at all.
+      #
+      # This runs the real release.sh in a sandbox, with the Apple identity
+      # and the notary service stubbed out — so it needs a Mac, not a Linux
+      # runner. It was not run anywhere for a long time, and it had stopped
+      # working: the sandbox was not a git repository, so every scenario
+      # failed before reaching the logic it claims to check, and the test
+      # passed on a broken release script.
+      - name: Release notarization control flow
+        working-directory: VisualiserMac
+        run: ./scripts/test-release-notarization.sh

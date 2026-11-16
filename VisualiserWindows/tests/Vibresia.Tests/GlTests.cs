@@ -138,7 +138,7 @@ public sealed class HostLifecycleTests : IDisposable
         try
         {
             // The whole monitor, not Silk's work area (which excludes the taskbar).
-            // Xvfb has no taskbar, so here the two coincide; the owner's PC is where they differ.
+            // Xvfb has no taskbar, so here the two coincide; a real Windows PC is where they differ.
             var bounds = MonitorArea.Primary()!.Value;
             Assert.Equal(WindowBorder.Hidden, window.WindowBorder);
             Assert.NotEqual(WindowState.Fullscreen, window.WindowState);

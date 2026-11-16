@@ -3,7 +3,7 @@ using System.Text;
 namespace Vibresia.Core;
 
 /// <summary>
-/// The app's one diagnostic channel: a plain-text file the owner can send
+/// The app's one diagnostic channel: a plain-text file someone can send
 /// back from a PC this code is never run on during development. One line per
 /// event — <c>timestamp level [area] message</c> — so it reads by eye.
 /// Rolls at a size cap and keeps a few old files, so it never grows without

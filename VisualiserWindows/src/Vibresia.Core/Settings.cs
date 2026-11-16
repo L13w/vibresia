@@ -31,14 +31,14 @@ public sealed class Settings
     /// <summary>
     /// The palette last picked, as an index into <see cref="Palette.All"/>. Stored by
     /// name so reordering the palettes can't swap one for another; an unknown
-    /// name means NEON. The Mac doesn't remember it (an owner-chosen difference).
+    /// name means NEON. The Mac doesn't remember it; remembering keeps the look someone chose across a restart.
     /// </summary>
     public int PaletteIndex { get; set; }
 
     /// <summary>
     /// Draw the Mac's CRT overlay (scanlines and vignette) while there is sound.
     /// On by default, as on the Mac; off gives the brighter look of the Mac's
-    /// exported videos. The Mac has no switch for it (an owner-chosen difference).
+    /// exported videos. The Mac has no switch for it.
     /// </summary>
     public bool CrtEffect { get; set; } = true;
 

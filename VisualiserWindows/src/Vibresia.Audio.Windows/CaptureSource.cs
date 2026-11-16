@@ -32,7 +32,7 @@ public sealed class CaptureSource : IAudioSource
     /// <summary>
     /// The device's volume slider and mute, logged beside the measured
     /// loudness. For loopback it varies by driver whether capture is taken
-    /// before or after this volume (on the owner's PC, before: the level was
+    /// before or after this volume (on the PC it was tested on, before: the level was
     /// the same at 4% and 72%); for a microphone it is the recording level.
     /// </summary>
     public string? LevelInfo

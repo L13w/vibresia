@@ -1,13 +1,15 @@
 namespace Vibresia.Core.Ui;
 
-/// <summary>The credits' two web pages: the only addresses the app ever hands to the browser.</summary>
+/// <summary>The credits' web pages: the only addresses the app ever hands to the browser.</summary>
 public static class CreditsLinks
 {
     public const string ProductSite = "https://vibresia.com";
     public const string MakerSite = "https://minithlabs.com";
+    /// <summary>Whoever made this Windows version.</summary>
+    public const string PortSite = "https://inertialnavigation.com";
 
-    /// <summary>A custom vibescape's author or URL is untrusted text and is never opened; only these two are.</summary>
-    public static bool IsAllowed(string url) => url is ProductSite or MakerSite;
+    /// <summary>A custom vibescape's author or URL is untrusted text and is never opened; only these are.</summary>
+    public static bool IsAllowed(string url) => url is ProductSite or MakerSite or PortSite;
 }
 
 /// <summary>Float above other apps (the Mac's alwaysOnTop), which the Mac suspends while full screen.</summary>
@@ -41,16 +43,16 @@ public static class StartupEntry
 /// What the app does as the chrome opens things: reads the custom folder
 /// again as the vibescape list or the View All panel opens (so a file copied
 /// in shows up without a restart), and reads Start at login back from
-/// Windows as the credits open (it may have changed in Task Manager).
+/// Windows as the Settings drop-down opens (it may have changed in Task Manager).
 /// </summary>
 public sealed class ChromeOpenings
 {
-    private readonly OpenEdge _list = new(), _panel = new(), _credits = new();
+    private readonly OpenEdge _list = new(), _panel = new(), _settings = new();
 
-    public (bool Rescan, bool ReadStartAtLogin) Update(bool listOpen, bool panelOpen, bool creditsOpen)
+    public (bool Rescan, bool ReadStartAtLogin) Update(bool listOpen, bool panelOpen, bool settingsOpen)
     {
         var list = _list.Update(listOpen);
         var panel = _panel.Update(panelOpen);
-        return (list || panel, _credits.Update(creditsOpen));
+        return (list || panel, _settings.Update(settingsOpen));
     }
 }

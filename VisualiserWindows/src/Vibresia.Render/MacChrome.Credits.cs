@@ -7,17 +7,20 @@ namespace Vibresia.Render;
 /// <summary>
 /// The Mac's credits button and popover (AboutButton): "🩷 from Minith Labs"
 /// in the bottom-right corner, which stays when the rest of the chrome
-/// hides, opening the credits with the two settings the owner chose to
-/// bring over (Start at login, Float above other apps). The "Proudly
-/// Shareware" section (its coffee button and the paragraph asking for one)
-/// and the share link above the button are left out by the owner's choice: an
-/// unofficial port shouldn't ask for money on Minith Labs' behalf. The
-/// Mac's song identification, analytics, music-app watcher and legal links
-/// are out of this port's scope.
+/// hides, opening the credits: VIBRESIA and minithlabs.com, as on the Mac,
+/// and who made this Windows version. The Mac also keeps two settings here
+/// (Start at login, Float above other apps); on Windows they are in the
+/// Settings drop-down with the rest, where a Windows user looks for them.
+/// Left out: the "Proudly Shareware" section and its coffee button, and the
+/// share link above the button, because an unofficial port shouldn't ask for
+/// money on Minith Labs' behalf; and the Mac's song identification,
+/// analytics, music-app watcher and legal links, which this port doesn't have.
 /// </summary>
 public sealed partial class MacChrome
 {
     private const string CreditsLabel = "♥ from Minith Labs";
+    private const string PortCredit = "Windows version by Llew Roberts";
+    private const string PortSiteLabel = "inertialnavigation.com";
 
     // 🩷, drawn: the interface fonts have no colour emoji.
     private static readonly Vector4 PinkHeart = new(1f, 0.6f, 0.78f, 1f);
@@ -54,15 +57,10 @@ public sealed partial class MacChrome
         var inner = (widthPoints - 2 * padPoints) * s;
         var gap = gapPoints * s;
 
-        var loginDetail = v.StartAtLogin ? "Vibresia opens when you sign in to Windows" : "Open Vibresia when you sign in";
-        var floatDetail = v.FloatOnTop ? "Vibresia stays above other windows" : "Vibresia goes behind other apps";
-        float ToggleHeight(string detail) => (15 + 2) * s + MeasureWrapped(Face.Sans, 9, detail, inner).Y;
         var height = 2 * padPoints * s
                      + (13 + 4 + 10) * s * 1.25f                    // VIBRESIA, minithlabs.com
                      + gap + gap                                    // divider
-                     + (9 * 1.25f + 10) * s + ToggleHeight(loginDetail)
-                     + gap + gap
-                     + (9 * 1.25f + 10) * s + ToggleHeight(floatDetail);
+                     + (11 + 4 + 10) * s * 1.25f;                   // the Windows version's credit
 
         // Above the button, its arrow pointing down at it (arrowEdge: .bottom), kept inside the window.
         var button = _creditsButton;
@@ -99,13 +97,13 @@ public sealed partial class MacChrome
         if (Clicked(ref f, new Vector2(x, y), siteMax)) actions.OpenWebsite(CreditsLinks.MakerSite);
         y = siteMax.Y;
 
+        // Who made this Windows version, and where to find them.
         y = Divider(d, x, y, inner, gap, alpha);
-        y = SectionTitle(d, "STARTUP", x, y, alpha);
-        y = ToggleRow(ref f, "Start at login", loginDetail, v.StartAtLogin, actions.ToggleStartAtLogin, x, y, inner, alpha);
-
-        y = Divider(d, x, y, inner, gap, alpha);
-        y = SectionTitle(d, "WINDOW", x, y, alpha);
-        ToggleRow(ref f, "Float above other apps", floatDetail, v.FloatOnTop, actions.ToggleFloatOnTop, x, y, inner, alpha);
+        DrawText(d, Face.Sans, 11, new Vector2(x, y), PortCredit, Colour(0.7f, 0.7f, 0.7f, alpha));
+        y += (11 * 1.25f + 4) * s;
+        var portMax = new Vector2(x + Measure(Face.Mono, 10, PortSiteLabel), y + 10 * 1.25f * s);
+        DrawText(d, Face.Mono, 10, new Vector2(x, y), PortSiteLabel, Colour(Cyan, alpha));
+        if (Clicked(ref f, new Vector2(x, y), portMax)) actions.OpenWebsite(CreditsLinks.PortSite);
 
         // A click inside the popover keeps it open; one outside closes it (Render does that).
         if (f.Click && !f.ClickTaken && Inside(f.Mouse, min, max)) f.ClickTaken = true;
@@ -116,23 +114,5 @@ public sealed partial class MacChrome
         y += gap;
         d.AddLine(new Vector2(x, y), new Vector2(x + width, y), Colour(1, 1, 1, 0.1f * alpha), 1 * _s);
         return y + gap;
-    }
-
-    private float SectionTitle(ImDrawListPtr d, string title, float x, float y, float alpha)
-    {
-        DrawTracked(d, Face.SansSemibold, 9, new Vector2(x, y), 1.2f, title, Colour(0.45f, 0.45f, 0.45f, alpha));
-        return y + (9 * 1.25f + 10) * _s;
-    }
-
-    /// <summary>A mini switch row (Toggle with .switch style): the title, the switch at the trailing edge, and a detail line under.</summary>
-    private float ToggleRow(ref Frame f, string title, string detail, bool on, Action toggle, float x, float y, float width, float alpha)
-    {
-        var s = _s;
-        DrawText(f.Draw, Face.SansSemibold, 11, new Vector2(x, y + 1 * s), title, Colour(1, 1, 1, alpha));
-        var switchMin = new Vector2(x + width - 26 * s, y);
-        DrawSwitch(f.Draw, switchMin, on, alpha);
-        if (Clicked(ref f, new Vector2(x, y - 2 * s), new Vector2(x + width, y + 17 * s))) toggle();
-        y += (15 + 2) * s;
-        return DrawWrapped(f.Draw, Face.Sans, 9, detail, new Vector2(x, y), width, Colour(0.45f, 0.45f, 0.45f, alpha));
     }
 }

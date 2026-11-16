@@ -406,11 +406,12 @@ public class SystemRulesTests
     [Theory]
     [InlineData("https://vibresia.com", true)]
     [InlineData("https://minithlabs.com", true)]
+    [InlineData("https://inertialnavigation.com", true)]
     [InlineData("https://vibresia.com/", false)]
     [InlineData("https://example.com", false)]
     [InlineData("file:///C:/Windows/System32/calc.exe", false)]
     [InlineData("", false)]
-    public void OnlyTheCreditsTwoPagesAreEverOpened(string url, bool allowed) =>
+    public void OnlyTheCreditsPagesAreEverOpened(string url, bool allowed) =>
         Assert.Equal(allowed, CreditsLinks.IsAllowed(url));
 
     [Theory]
@@ -434,14 +435,14 @@ public class SystemRulesTests
     }
 
     [Fact]
-    public void OpeningTheListOrPanelRescansAndOpeningTheCreditsReadsStartAtLogin()
+    public void OpeningTheListOrPanelRescansAndOpeningSettingsReadsStartAtLogin()
     {
         var o = new ChromeOpenings();
         Assert.Equal((false, false), o.Update(false, false, false));
         Assert.Equal((true, false), o.Update(true, false, false));    // the drop-down opens
         Assert.Equal((false, false), o.Update(true, false, false));   // still open: once only
         Assert.Equal((true, false), o.Update(false, true, false));    // the panel opens
-        Assert.Equal((false, true), o.Update(false, false, true));    // the credits open
+        Assert.Equal((false, true), o.Update(false, false, true));    // the Settings drop-down opens
         Assert.Equal((false, false), o.Update(false, false, true));
     }
 }

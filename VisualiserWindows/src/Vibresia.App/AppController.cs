@@ -48,7 +48,7 @@ internal sealed class AppController
 
     private VibescapeCatalog Catalog => _list.Catalog;
 
-    /// <summary>The palette in use. Remembered when picked from the drop-down, unlike on the Mac (owner's choice).</summary>
+    /// <summary>The palette in use. Remembered when picked from the drop-down, unlike on the Mac, so a restart keeps the look someone chose.</summary>
     public int PaletteIndex { get; private set; }
 
     public ChromeActions Actions { get; }
@@ -226,12 +226,12 @@ internal sealed class AppController
     /// <summary>
     /// After the chrome has drawn: rescans the custom folder as the vibescape
     /// list or the View All panel opens, so a file copied in shows up without
-    /// a restart, and reads Start at login back from Windows as the credits open.
+    /// a restart, and reads Start at login back from Windows as the Settings drop-down opens.
     /// </summary>
     public void AfterRender()
     {
         var (rescan, readStartAtLogin) = _openings.Update(_chrome.OpenMenu == ChromeMenu.Vibescape,
-            _chrome.OpenPanel == ChromePanel.ViewAll, _chrome.OpenPanel == ChromePanel.Credits);
+            _chrome.OpenPanel == ChromePanel.ViewAll, _chrome.OpenMenu == ChromeMenu.Settings);
         if (rescan) _list.Rescan(CustomVibescapeLoader.LoadAll(_customFolder, _log));
         if (readStartAtLogin) _startAtLogin = _system.ReadStartAtLogin();
     }

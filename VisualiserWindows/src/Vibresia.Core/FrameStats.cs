@@ -3,7 +3,7 @@ namespace Vibresia.Core;
 /// <summary>
 /// Collects frame times and, once a period has elapsed, returns a one-line
 /// summary for the health log: average and 99th-percentile frame time, and
-/// how many frames ran long. That is how stutter on the owner's PC becomes
+/// how many frames ran long. That is how stutter on someone's PC becomes
 /// visible in a log file.
 /// </summary>
 public sealed class FrameStats(double periodSeconds = 60, double longFrameSeconds = 1.0 / 30)

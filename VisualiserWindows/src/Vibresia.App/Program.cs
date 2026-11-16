@@ -104,7 +104,7 @@ public static partial class Program
         });
         hostRef = host;
 
-        // The last palette picked (the Mac starts on NEON every launch; the owner chose to remember it). --palette N picks one for this run.
+        // The last palette picked, so a restart keeps the look someone chose (the Mac starts on NEON every launch). --palette N picks one for this run.
         var paletteIndex = settings.PaletteIndex;
         if (Array.IndexOf(args, "--palette") is var pi and >= 0 && pi + 1 < args.Length && int.TryParse(args[pi + 1], out var asked))
             paletteIndex = asked >= 0 && asked < Palette.All.Count ? asked : paletteIndex;

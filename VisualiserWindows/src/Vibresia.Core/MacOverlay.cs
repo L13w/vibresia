@@ -25,8 +25,8 @@ public sealed class MacOverlay
     /// <summary>
     /// Whether the CRT overlay is wanted at all (Settings → CRT Effect, on by
     /// default as on the Mac). Turning it off fades it out like silence does.
-    /// The Mac has no such switch: it is an owner-chosen difference, for the
-    /// brighter look of the Mac's exported videos, which leave the overlay out.
+    /// The Mac has no such switch: it is here for the brighter look of the
+    /// Mac's exported videos, which leave the overlay out.
     /// </summary>
     public bool CrtEnabled { get; set; } = true;
 

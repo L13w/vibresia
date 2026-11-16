@@ -359,6 +359,9 @@ public sealed partial class MacChrome : IDisposable
             new Row("Full Screen", a.ToggleFullScreen, v.FullScreen, "F11"),
             new Row("Keep the Display Awake", a.ToggleKeepDisplayAwake, v.KeepDisplayAwake, "Stops Windows dimming or sleeping it"),
             new Row("CRT Effect", a.ToggleCrtEffect, v.CrtEffect, "Scanlines and vignette, as on the Mac"),
+            // The Mac keeps these two in its About popover; here they sit with the other settings.
+            new Row("Float Above Other Apps", a.ToggleFloatOnTop, v.FloatOnTop, "Keeps the window above other windows"),
+            new Row("Start at Login", a.ToggleStartAtLogin, v.StartAtLogin, "Opens Vibresia when you sign in to Windows"),
             new Row("Open Custom Vibescapes Folder", a.OpenCustomFolder, false, "Drop .json vibescapes here"),
             new Row("Open Log Folder", a.OpenLogFolder, false, "F12"),
         ],

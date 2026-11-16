@@ -181,7 +181,7 @@ public sealed class VibescapeGlTests : IDisposable
             var problem = host.Show(Custom("vec3 render(vec2 p, float t) { return worse; }", "also-broken"));
             Assert.NotNull(problem);
             Assert.Equal(fallback.Id, host.Current.Id);
-            var text = File.ReadAllText(log.FilePath);
+            var text = Paths.ReadShared(log.FilePath);
             Assert.Contains("custom:broken-one didn't compile", text);
             Assert.Contains("falling back to builtin:kaleidoscope", text);
             Assert.Contains("custom:also-broken didn't compile; still showing builtin:kaleidoscope", text);
@@ -251,7 +251,7 @@ public sealed class VibescapeGlTests : IDisposable
             Assert.False(pictureTook, "a click on the picture is the vibescape's");
             Assert.False(hiddenTook, "a hidden header takes no clicks");
             Assert.Equal(0f, state.Shown);
-            Assert.Contains("interface fonts:", File.ReadAllText(log.FilePath));
+            Assert.Contains("interface fonts:", Paths.ReadShared(log.FilePath));
         }
         finally
         {
@@ -293,7 +293,7 @@ public sealed class VibescapeGlTests : IDisposable
             Assert.False(visibleAtFirst, "the first frame is drawn while the window is still hidden");
             Assert.True(visibleLater, "the window appears once a frame is on it");
             Assert.False(first!.LooksBlank, "drawing into the hidden window still drew a picture");
-            Assert.Contains("window shown, with a frame already drawn", File.ReadAllText(log.FilePath));
+            Assert.Contains("window shown, with a frame already drawn", Paths.ReadShared(log.FilePath));
         }
         finally
         {
@@ -357,7 +357,7 @@ public sealed class VibescapeGlTests : IDisposable
             Assert.True(panelTook, "the View All panel is a sheet: it takes every click");
             Assert.False(clearTook, "with nothing open and no intro, the picture gets its clicks");
             Assert.Equal(GLEnum.NoError, glError);
-            var text = File.ReadAllText(log.FilePath);
+            var text = Paths.ReadShared(log.FilePath);
             Assert.Contains("custom:broken needs a fix", text);
             Assert.DoesNotContain("custom:mine needs a fix", text);
             Assert.DoesNotContain("no picture for", text);

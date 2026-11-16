@@ -160,7 +160,7 @@ public sealed class CustomLoaderTests : IDisposable
 {
     private readonly string _root = Path.Combine(Path.GetTempPath(), "vibresia-custom-" + Guid.NewGuid().ToString("N"));
     private string Folder => Path.Combine(_root, "Vibescapes");
-    private string LogText => File.ReadAllText(Path.Combine(_root, "logs", Log.FileName));
+    private string LogText => Paths.ReadShared(Path.Combine(_root, "logs", Log.FileName));
 
     private const string Body = "vec3 render(vec2 p, float t) { return vec3(uBass); }";
 

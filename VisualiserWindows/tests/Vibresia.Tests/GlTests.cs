@@ -124,7 +124,7 @@ public sealed class HostLifecycleTests : IDisposable
         window.Dispose();
 
         Assert.True(host.FramesDrawn >= 10);
-        var text = File.ReadAllText(log.FilePath);
+        var text = Paths.ReadShared(log.FilePath);
         Assert.Contains("closing after", text);
         Assert.Contains("[frame] first frame:", text);
         Assert.NotNull(host.LastSample);

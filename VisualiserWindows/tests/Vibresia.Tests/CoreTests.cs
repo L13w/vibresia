@@ -25,7 +25,7 @@ public sealed class LogTests : IDisposable
         Assert.Equal(new[] { "vibresia.log", "vibresia.log.1", "vibresia.log.2" }, files);
         Assert.All(Directory.GetFiles(_dir), f => Assert.True(new FileInfo(f).Length <= 200));
         // The newest line is in the live file; the oldest have rolled off entirely.
-        Assert.Contains("line 039", File.ReadAllText(Path.Combine(_dir, "vibresia.log")));
+        Assert.Contains("line 039", Paths.ReadShared(Path.Combine(_dir, "vibresia.log")));
         Assert.DoesNotContain(Directory.GetFiles(_dir), f => File.ReadAllText(f).Contains("line 000"));
     }
 
@@ -36,7 +36,7 @@ public sealed class LogTests : IDisposable
         Directory.CreateDirectory(Path.Combine(_dir, "vibresia.log.1"));
         using (var log = new Log(_dir, maxBytes: 120, keep: 3))
             for (var i = 0; i < 10; i++) log.Info("t", $"line {i} padding padding padding");
-        Assert.Contains("line 9", File.ReadAllText(Path.Combine(_dir, Log.FileName)));
+        Assert.Contains("line 9", Paths.ReadShared(Path.Combine(_dir, Log.FileName)));
     }
 
     [Fact]

@@ -261,7 +261,7 @@ public class AudioPipelineTests : IDisposable
 
         src.Feed(t => AnalyserRig.Sine(t, 200), 10, Tick);
         Assert.Equal(AudioStatus.Playing, pipe.Status);
-        Assert.Contains("nothing audible", File.ReadAllText(log.FilePath));
+        Assert.Contains("nothing audible", Paths.ReadShared(log.FilePath));
     }
 
     [Fact]
@@ -311,7 +311,7 @@ public class AudioPipelineTests : IDisposable
         Assert.Equal("device unplugged", pipe.FailureMessage);
         Assert.Equal(1f, u.Idle);
         Assert.True(u.Active < 0.01f, $"active {u.Active}");
-        Assert.Contains("ERROR [audio] device unplugged", File.ReadAllText(log.FilePath));
+        Assert.Contains("ERROR [audio] device unplugged", Paths.ReadShared(log.FilePath));
     }
 
     [Fact]
@@ -337,7 +337,7 @@ public class AudioPipelineTests : IDisposable
     {
         using (var log = new Log(_dir))
         using (var pipe = new AudioPipeline(log)) pipe.Use(new FakeSource());
-        Assert.Contains("started fake at 48000 Hz; fake format", File.ReadAllText(Path.Combine(_dir, Log.FileName)));
+        Assert.Contains("started fake at 48000 Hz; fake format", Paths.ReadShared(Path.Combine(_dir, Log.FileName)));
     }
 
     /// <summary>The app's AudioSources owns and disposes sources; a pipeline disposing them too disposed loopback twice on exit.</summary>
@@ -363,7 +363,7 @@ public class AudioPipelineTests : IDisposable
             var u = new FrameUniforms();
             src.Feed(t => AnalyserRig.Sine(t, 200), 61 * 60, () => pipe.Tick(u, 1 / 60.0));
         }
-        var text = File.ReadAllText(Path.Combine(_dir, Log.FileName));
+        var text = Paths.ReadShared(Path.Combine(_dir, Log.FileName));
         Assert.Matches(@"\[audio\] fake, Playing: 60 s: rms avg 0\.\d+ max 0\.\d+; gate closed \d+% partly \d+%; activity avg", text);
         Assert.Matches(@"\[audio\] fake, Playing: 60 s: .*; fake volume 42%", text); // the volume the sound may have passed through
     }

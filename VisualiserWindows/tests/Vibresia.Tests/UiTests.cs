@@ -406,7 +406,7 @@ public class SystemRulesTests
     [Theory]
     [InlineData("https://vibresia.com", true)]
     [InlineData("https://minithlabs.com", true)]
-    [InlineData("https://inertialnavigation.com", true)]
+    [InlineData("https://inertialnavigationllc.com", true)]
     [InlineData("https://vibresia.com/", false)]
     [InlineData("https://example.com", false)]
     [InlineData("file:///C:/Windows/System32/calc.exe", false)]

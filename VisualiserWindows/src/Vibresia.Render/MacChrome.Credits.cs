@@ -20,7 +20,7 @@ public sealed partial class MacChrome
 {
     private const string CreditsLabel = "♥ from Minith Labs";
     private const string PortCredit = "Windows version by Llew Roberts";
-    private const string PortSiteLabel = "inertialnavigation.com";
+    private const string PortSiteLabel = "inertialnavigationllc.com";
 
     // 🩷, drawn: the interface fonts have no colour emoji.
     private static readonly Vector4 PinkHeart = new(1f, 0.6f, 0.78f, 1f);

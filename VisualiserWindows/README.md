@@ -2,7 +2,7 @@
 
 Visual worlds that move with whatever your PC is playing: neon tunnels, silk ribbons, a dancing llama. Play some music and Vibresia turns it into a live scene that pulses with the bass and sparkles with the treble.
 
-This is a community-built Windows version (beta) of [Vibresia](../README.md), the free macOS app by Syd Lawrence / Minith Labs. It runs the Mac app's own vibescapes, unchanged, and copies its look and controls. It is MIT licensed, like the original (see [`../LICENSE`](../LICENSE)). Windows version by Llew Roberts ([inertialnavigation.com](https://inertialnavigation.com)).
+This is a community-built Windows version (beta) of [Vibresia](../README.md), the free macOS app by Syd Lawrence / Minith Labs. It runs the Mac app's own vibescapes, unchanged, and copies its look and controls. It is MIT licensed, like the original (see [`../LICENSE`](../LICENSE)). Windows version by Llew Roberts ([inertialnavigationllc.com](https://inertialnavigationllc.com)).
 
 Nothing is recorded or sent anywhere: the sound is analysed in memory, and the app makes no network connections.
 

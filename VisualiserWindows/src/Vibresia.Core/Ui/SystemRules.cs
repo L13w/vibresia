@@ -6,7 +6,7 @@ public static class CreditsLinks
     public const string ProductSite = "https://vibresia.com";
     public const string MakerSite = "https://minithlabs.com";
     /// <summary>Whoever made this Windows version.</summary>
-    public const string PortSite = "https://inertialnavigation.com";
+    public const string PortSite = "https://inertialnavigationllc.com";
 
     /// <summary>A custom vibescape's author or URL is untrusted text and is never opened; only these are.</summary>
     public static bool IsAllowed(string url) => url is ProductSite or MakerSite or PortSite;
